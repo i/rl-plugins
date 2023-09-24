@@ -24,5 +24,12 @@ public interface FuzzyBankSearchConfig extends Config
 			name = "Limit",
 			description = "Number of results to return"
 	)
-	default int  limit() { return 10 ; }
+	default int  limit() { return 10; }
+
+	@ConfigItem(
+			keyName = "useFzf",
+			name = "Use FZF",
+			description = "Uses fzf when enabled, jaro winker if disabled"
+	)
+	default boolean  useFzf() { return true; }
 }
