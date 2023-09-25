@@ -1,13 +1,3 @@
-Fuzzy Bank Search
----
+# Plugins
 
-Search for items in your bank using fuzzy matching. This allows you to filter 
-items using shorthands, abbreviations, or full words (allowing for spelling mistakes).
-
-Here are some useful search terms to get you started:
- - "dwh": draon warhammer
- - "bofa"/bowfa: bow of whatever...
- - "dclaws": dragon claws
- - "adef": avernic defender
- - "msb": magic shortbow
- - "()": should return anything with charges (pots, jewelry, etc.)
+- [Fuzzy bank search](https://github.com/i/rl-plugins/tree/fuzzy-bank-search) - Allows fuzzy searching your bank (e.g. type dwh to find dragon warhammer)
