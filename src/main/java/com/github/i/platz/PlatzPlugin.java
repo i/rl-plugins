@@ -69,7 +69,7 @@ public class PlatzPlugin extends Plugin {
 
 
 	private void setTradeValueText(int widgetId, long value) {
-		var formattedNumber = (this.config.abbreviate() && value > 100_000_000L)
+		var formattedNumber = (this.config.abbreviate() && value > this.config.largeNumberCutoff())
 				? abbreviateBigNumber(value)
 				: String.format("%,d", value);
 
