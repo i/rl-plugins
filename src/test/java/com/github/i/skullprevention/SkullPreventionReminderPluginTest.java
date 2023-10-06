@@ -1,13 +1,11 @@
-package com.github.i.fuzzybanksearch;
+package com.github.i.skullprevention;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class FuzzyBankSearchPluginTest {
+public class SkullPreventionReminderPluginTest {
 	public static void main(String[] args) throws Exception {
-
-
-		ExternalPluginManager.loadBuiltin(FuzzyBankSearchPlugin.class);
+		ExternalPluginManager.loadBuiltin(SkullPreventionIconPlugin.class);
 		RuneLite.main(args);
 	}
 }
