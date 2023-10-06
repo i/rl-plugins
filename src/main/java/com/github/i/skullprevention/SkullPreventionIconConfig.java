@@ -5,27 +5,21 @@ import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
 
 @ConfigGroup("Skull prevention")
-public interface SkullPreventionIconConfig extends Config
-{
+public interface SkullPreventionIconConfig extends Config {
 	@ConfigItem(
-			keyName = "pvpOnly",
-			name = "PVP only",
-			description = "Only draw overlay in pvp"
+		keyName = "pvpOnly",
+		name = "PVP only",
+		description = "Only draw overlay in pvp"
 	)
 	default boolean pvpOnly() { return false; }
 
-	enum Mode {
-		BOTH,
-		DISABLED_ONLY,
-		ENABLED_ONLY
-	}
+	enum Mode { BOTH, DISABLED_ONLY, ENABLED_ONLY }
 	@ConfigItem(
-			keyName = "mode",
-			name = "Mode",
-			description = "Show the icon only when protection disabled, enabled or both"
+		keyName = "mode",
+		name = "Mode",
+		description = "Show the icon only when protection disabled, enabled or both"
 	)
 	default Mode mode() { return Mode.BOTH; }
-
 
 	String SIZE_KEY = "size";
 	@ConfigItem(

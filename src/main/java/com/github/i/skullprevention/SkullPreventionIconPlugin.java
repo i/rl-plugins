@@ -50,7 +50,6 @@ public class SkullPreventionIconPlugin extends Plugin {
 		}
 	}
 
-
 	public boolean isInPVP() {
 		return client.getVarbitValue(Varbits.IN_WILDERNESS) == 1 ||
 				client.getVarbitValue(Varbits.PVP_SPEC_ORB) == 1;
@@ -70,6 +69,4 @@ public class SkullPreventionIconPlugin extends Plugin {
 			overlay.reloadImages(config.size());
 		}
 	}
-
-
 }
