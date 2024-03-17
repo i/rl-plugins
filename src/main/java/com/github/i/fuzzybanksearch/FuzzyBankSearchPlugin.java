@@ -3,18 +3,15 @@ package com.github.i.fuzzybanksearch;
 import com.github.i.fuzzybanksearch.matcher.FZFMatcher;
 import com.github.i.fuzzybanksearch.matcher.JaroWinklerMatcher;
 import com.github.i.fuzzybanksearch.matcher.Matcher;
-import com.github.i.fuzzybanksearch.matcher.fzf.FuzzyMatcherV1;
-import com.github.i.fuzzybanksearch.matcher.fzf.OrderBy;
 import com.google.inject.Provides;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.InventoryID;
 import net.runelite.api.ItemComposition;
-import net.runelite.api.ItemContainer;
 import net.runelite.api.events.ItemContainerChanged;
 import net.runelite.api.events.ScriptCallbackEvent;
+import net.runelite.api.widgets.ComponentID;
 import net.runelite.api.widgets.Widget;
-import net.runelite.api.widgets.WidgetInfo;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -26,7 +23,6 @@ import net.runelite.client.plugins.bank.BankSearch;
 
 import javax.inject.Inject;
 import java.awt.event.KeyEvent;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Set;
@@ -119,7 +115,7 @@ public class FuzzyBankSearchPlugin extends Plugin {
 		@Override
 		public void keyPressed(KeyEvent e) {
 			if (config.hotkey().matches(e)) {
-				Widget bankContainer = client.getWidget(WidgetInfo.BANK_ITEM_CONTAINER);
+				Widget bankContainer = client.getWidget(ComponentID.BANK_ITEM_CONTAINER);
 				if (bankContainer != null && !bankContainer.isSelfHidden())
 				{
 					bankSearch.initSearch();
