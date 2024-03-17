@@ -94,6 +94,10 @@ public class FuzzyBankSearchPlugin extends Plugin {
 
 
 	public boolean filterBankSearch(final int itemId, final String query) {
+		if (query.equals("")) {
+			return true;
+		}
+
 		// previous results are cached until in text input changes.
 		// the client will try to update every 40ms
 		if (!oldQuery.equals(query) || cachedResults == null) {
