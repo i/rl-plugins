@@ -34,7 +34,8 @@ import java.util.stream.Stream;
 @Slf4j
 @PluginDescriptor(name = "000-gear-tags")
 public class AutoTagsPlugin extends Plugin {
-	private Gson gson = new Gson();
+	@Inject
+	private Gson gson;
 
 	private Map<CombatType, Set<String>> overrides;
 
