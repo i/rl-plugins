@@ -1,13 +1,11 @@
-package com.github.i.fuzzybanksearch;
+package com.github.i.autotags;
 
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class FuzzyBankSearchPluginTest {
+public class GearTagsPluginTest {
 	public static void main(String[] args) throws Exception {
-
-
-		ExternalPluginManager.loadBuiltin(FuzzyBankSearchPlugin.class);
+		ExternalPluginManager.loadBuiltin(AutoTagsPlugin.class);
 		RuneLite.main(args);
 	}
 }
