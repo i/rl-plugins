@@ -32,7 +32,7 @@ import java.util.*;
 import java.util.stream.Stream;
 
 @Slf4j
-@PluginDescriptor(name = "000-gear-tags")
+@PluginDescriptor(name = "auto-tags")
 public class AutoTagsPlugin extends Plugin {
 	@Inject
 	private Gson gson;

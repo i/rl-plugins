@@ -27,6 +27,7 @@ package com.github.i.autotags;
 import com.google.gson.Gson;
 import net.runelite.client.config.*;
 
+import javax.inject.Inject;
 import java.awt.*;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -133,14 +134,14 @@ public interface AutoTagsConfig extends Config {
 	}
 
 
-	Gson gson = new Gson();
 	@ConfigItem(
 			keyName = "overrides",
 			name = "overrides",
 			description = "holds json for overrides",
 			hidden = true
 	)
-	default String overrides() {
+	@Inject
+	default String overrides(Gson gson) {
 		return gson.toJson(CombatType.CHOICE_LIST.stream()
 				.collect(Collectors.toMap(
 						combatType -> combatType,
