@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 
 @ConfigGroup(AutoTagsConfig.GROUP)
 public interface AutoTagsConfig extends Config {
-	String GROUP = "auto-tags";
+	String GROUP = "AutoTags";
 
 	@ConfigSection(
 		name = "Tag display mode",
