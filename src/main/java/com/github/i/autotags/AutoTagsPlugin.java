@@ -51,9 +51,12 @@ public class AutoTagsPlugin extends Plugin {
 	@Inject
 	AutoTagsOverlay overlay;
 
+	private static final String OLD_CONFIG_GROUP_NAME = "auto-tags";
+
 	@Override
 	protected void startUp() {
 		overlayManager.add(overlay);
+		migrate(OLD_CONFIG_GROUP_NAME, AutoTagsConfig.GROUP);
 		reloadOverrides();
 	}
 
@@ -70,6 +73,23 @@ public class AutoTagsPlugin extends Plugin {
 	@Provides
 	AutoTagsConfig provideConfig(ConfigManager configManager) {
 		return configManager.getConfig(AutoTagsConfig.class);
+	}
+
+
+	private void migrate(String oldGroup, String newGroup) {
+		String oldKeyPrefix = oldGroup + ".";
+
+		for (String groupQualifiedKey : configManager.getConfigurationKeys(oldKeyPrefix)) {
+			String key = groupQualifiedKey.replaceAll(oldKeyPrefix, "");
+
+			String newVal = configManager.getConfiguration(newGroup, key);
+			String oldVal = configManager.getConfiguration(oldGroup, key);
+
+			// only migrate values that aren't set
+			if (oldVal != null && (newVal == null || newVal.isEmpty())) {
+				configManager.setConfiguration(newGroup, key, oldVal);
+			}
+		}
 	}
 
 	private Tag tagForCombatType(CombatType combatType) {
@@ -217,14 +237,14 @@ public class AutoTagsPlugin extends Plugin {
 				choices.remove(selectedType);
 
 				for (CombatType type : choices) {
-						var optionStr = colorForType(type)
-								.map(color -> ColorUtil.prependColorTag(type.toString(), color))
-								.orElse(type.toString());
-						client.createMenuEntry(idx)
-								.setOption(optionStr)
-								.setType(MenuAction.RUNELITE)
-								.setParent(parent)
-								.onClick(e -> override(itemName, selectedType, e.getOption()));
+					var optionStr = colorForType(type)
+							.map(color -> ColorUtil.prependColorTag(type.toString(), color))
+							.orElse(type.toString());
+					client.createMenuEntry(idx)
+							.setOption(optionStr)
+							.setType(MenuAction.RUNELITE)
+							.setParent(parent)
+							.onClick(e -> override(itemName, selectedType, e.getOption()));
 				}
 			}
 		}
@@ -242,8 +262,9 @@ public class AutoTagsPlugin extends Plugin {
 			overrides.get(oldType).remove(itemName);
 		}
 
-		var newTypeItems = overrides.getOrDefault(newType, Set.of());
+		Set<String> newTypeItems = overrides.getOrDefault(newType, new HashSet<>());
 		newTypeItems.add(itemName);
+		overrides.put(newType, newTypeItems);
 
 		var json = gson.toJson(overrides);
 		configManager.setConfiguration(AutoTagsConfig.GROUP, "overrides", json);
