@@ -20,6 +20,7 @@ import net.runelite.client.input.KeyManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.bank.BankSearch;
+import net.runelite.client.plugins.banktags.BankTagsPlugin;
 
 import javax.inject.Inject;
 import java.awt.event.KeyEvent;
@@ -134,14 +135,14 @@ public class FuzzyBankSearchPlugin extends Plugin {
 
 	@Subscribe
 	public void onScriptCallbackEvent(ScriptCallbackEvent event) {
-		int[] intStack = client.getIntStack();
-		String[] stringStack = client.getStringStack();
 		int intStackSize = client.getIntStackSize();
-		int stringStackSize = client.getStringStackSize();
+		int[] intStack = client.getIntStack();
+		int objectStackSize = client.getObjectStackSize();
+		Object[] objectStack = client.getObjectStack();
 
 		if (event.getEventName().equals(BANK_SEARCH_FILTER_EVENT)) {
 			int itemId = intStack[intStackSize - 1];
-			String query = stringStack[stringStackSize - 1];
+			String query = (String) objectStack[objectStackSize - 1];
 			intStack[intStackSize - 2] = filterBankSearch(itemId, query) ? 1 : 0;
 		}
 	}
