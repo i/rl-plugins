@@ -7,6 +7,7 @@ import net.runelite.api.Client;
 import net.runelite.api.InventoryID;
 import net.runelite.api.Item;
 import net.runelite.api.events.ItemContainerChanged;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -44,17 +45,27 @@ public class PlatzPlugin extends Plugin {
 
 	private static final int MY_TRADE_VALUE_WIDGET_ID = 21954584;
 	private static final int OTHER_TRADE_VALUE_WIDGET_ID = 21954587;
+	private static final int PRICE_CHECKER_WIDGET_ID = 30408716;
 
+	private boolean gePriceCheckOpen() {
+		return client.getWidget(PRICE_CHECKER_WIDGET_ID) != null;
+	}
 
 	@Subscribe
 	public void onItemContainerChanged(ItemContainerChanged event) {
-		var inventoryId = event.getContainerId();
-		int widgetIdToUpdate;
+		final int inventoryId = event.getContainerId();
+		final int widgetIdToUpdate;
+		final String template;
 
-		if (inventoryId == InventoryID.TRADEOTHER.getId()) {
+		if (gePriceCheckOpen() && inventoryId == InventoryID.TRADE.getId()) {
+			widgetIdToUpdate = InterfaceID.GePricechecker.OUTPUT;
+			template = PRICE_CHECK_TEMPLATE;
+		} else if (inventoryId == InventoryID.TRADEOTHER.getId()) {
 			widgetIdToUpdate = OTHER_TRADE_VALUE_WIDGET_ID;
+			template = THEIR_OFFER_TEMPLATE;
 		} else if (inventoryId == InventoryID.TRADE.getId()) {
 			widgetIdToUpdate = MY_TRADE_VALUE_WIDGET_ID;
+			template = YOUR_OFFER_TEMPLATE;
 		} else {
 			return;
 		}
@@ -64,26 +75,24 @@ public class PlatzPlugin extends Plugin {
 			total += (long) this.itemManager.getItemPrice(item.getId()) * (long) item.getQuantity();
 		}
 
-		setTradeValueText(widgetIdToUpdate, total);
+		setTradeValueText(widgetIdToUpdate, total, template);
 	}
 
+	private final String THEIR_OFFER_TEMPLATE = "Their offer:<br>(Value: <col=ffffff>%s</col> coins)";
+	private final String YOUR_OFFER_TEMPLATE = "Your offer:<br>(Value: <col=ffffff>%s</col> coins)";
+	private final String PRICE_CHECK_TEMPLATE = "Total guide price:<br><col=ffffff>%s</col>";
 
-	private void setTradeValueText(int widgetId, long value) {
-		var formattedNumber = (this.config.abbreviate() && value > this.config.largeNumberCutoff())
+	private void setTradeValueText(int widgetId, long value, String template) {
+		var formattedNumber = (this.config.abbreviate() && value > this.config.threshold().value())
 				? abbreviateBigNumber(value)
 				: String.format("%,d", value);
 
-		var msg =  String.format(
-				"%s offer:<br>(Value: <col=ffffff>%s</col> coins)",
-				widgetId == MY_TRADE_VALUE_WIDGET_ID ? "Your" : "Their",
-				formattedNumber);
-		client.getWidget(widgetId).setText(msg);
+		var text = String.format(template, formattedNumber);
+	 	client.getWidget(widgetId).setText(text);
 	}
 
-
-
 	private static String[] suffix = new String[]{"","K", "M", "B", "T"};
-	private static final int MAX_SHORT_LENGTH = 10;
+	private static final int MAX_SHORT_LENGTH = 4;
 
 	@VisibleForTesting
 	public static String abbreviateBigNumber(long number) {
