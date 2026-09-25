@@ -17,12 +17,7 @@
 uniform mat4 invProjectionMatrix; // scene clip space back to local scene space
 uniform vec3 cameraPos;           // camera position in local scene space
 
-vec3 srgbToLinear(vec3 srgb) {
-    return mix(
-        srgb / 12.92,
-        pow((srgb + vec3(0.055)) / vec3(1.055), vec3(2.4)),
-        step(vec3(0.04045), srgb));
-}
+#include oklab.glsl
 
 // Hue, saturation and value, each 0..1
 vec3 srgbToHsv(vec3 c) {
@@ -53,6 +48,8 @@ uniform float lineWidth;       // outline thickness in pixels
 uniform int paintRadius;       // brush radius, or pixel size for MS Paint
 uniform float canvasStrength;  // 0..1 paper/canvas grain strength
 uniform int hueSteps;          // number of hues the acrylic style paints with, 0 = unlimited
+uniform sampler2D adaptivePalette; // MS Paint colors picked from the frame, in OKLab, one per texel of row 0
+uniform int adaptiveColors;       // how many adaptivePalette colors to use, 0 for the classic palette
 
 // Round shadows under sprites, as (x, y, z, radius) in local scene space. Must match SpriteManager.MAX_SHADOWS.
 #define MAX_SPRITE_SHADOWS 32
@@ -299,22 +296,6 @@ float canvasWeave(vec2 screenPx) {
     return weave + (hash12(floor(screenPx)) - 0.5) * 0.12;
 }
 
-// OKLab (https://bottosson.github.io/posts/oklab/): distances in it match how different colors look
-vec3 srgbToOklab(vec3 srgb) {
-    vec3 linear = srgbToLinear(clamp(srgb, 0.0, 1.0));
-    vec3 lms = mat3(
-        0.4122214708, 0.2119034982, 0.0883024619,
-        0.5363325363, 0.6806995451, 0.2817188376,
-        0.0514459929, 0.1073969566, 0.6299787005
-    ) * linear;
-    lms = pow(max(lms, vec3(0.0)), vec3(1.0 / 3.0));
-    return mat3(
-        0.2104542553, 1.9779984951, 0.0259040371,
-        0.7936177850, -2.4285922050, 0.7827717662,
-        -0.0040720468, 0.4505937099, -0.8086757660
-    ) * lms;
-}
-
 // How much hue and saturation count against lightness when matching. The palette has few muted colors, so
 // without the extra weight OSRS's muted greens and browns would mostly match greys.
 const vec3 PALETTE_MATCH_WEIGHTS = vec3(1.0, 2.2, 2.2);
@@ -382,12 +363,30 @@ vec3 squiggleVision(vec2 px, vec2 screenPx) {
     return softLight(color, mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
+// Nearest of the colors PainterlyPass picked from the frame, see palette_frag.glsl
+vec3 nearestAdaptiveColor(vec3 color) {
+    vec3 target = srgbToOklab(color);
+    vec3 best = target;
+    float bestDistance = 1e9;
+    for (int i = 0; i < adaptiveColors && i < MAX_ADAPTIVE_COLORS; i++) {
+        vec3 candidate = texelFetch(adaptivePalette, ivec2(i, 0), 0).rgb;
+        vec3 diff = candidate - target;
+        float paletteDistance = dot(diff, diff);
+        if (paletteDistance < bestDistance) {
+            bestDistance = paletteDistance;
+            best = candidate;
+        }
+    }
+    return oklabToSrgb(best);
+}
+
 vec3 msPaint(vec2 px) {
     // Chunky pixels: snap to a grid of pixelSize scene pixels
     float pixelSize = float(max(paintRadius, 1));
     vec2 cell = (floor(px / pixelSize) + 0.5) * pixelSize;
 
-    vec3 fill = nearestPaletteColor(sampleColor(cell));
+    vec3 color = sampleColor(cell);
+    vec3 fill = adaptiveColors > 0 ? nearestAdaptiveColor(color) : nearestPaletteColor(color);
 
     // Hard, aliased black outlines with only a little wobble
     float line = step(0.5, outline(cell + wobbleOffset(cell, 1.0 / 60.0) * 0.5, lineWidth));

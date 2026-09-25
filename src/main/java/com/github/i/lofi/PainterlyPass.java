@@ -22,6 +22,9 @@ class PainterlyPass
 	// Texture units 0 and 1 hold the UI and the game's texture array
 	private static final int UNIT_COLOR = 2;
 	private static final int UNIT_DEPTH = 3;
+	private static final int UNIT_PALETTE = 4;
+	// Used while the adaptive palette is refreshed, before the painting pass binds its own textures
+	private static final int UNIT_PALETTE_WORK = 5;
 
 	// Keeps the boil seed small enough to stay precise as a float over long sessions
 	private static final int BOIL_SEED_PERIOD = 1024;
@@ -35,6 +38,7 @@ class PainterlyPass
 	private LofiConfig config;
 
 	private final long startNanos = System.nanoTime();
+	private final AdaptivePalette adaptivePalette = new AdaptivePalette();
 
 	private int program;
 	private int vaoEmpty;
@@ -55,6 +59,8 @@ class PainterlyPass
 	private int uniSpriteShadowCount;
 	private int uniInvProjectionMatrix;
 	private int uniCameraPos;
+	private int uniAdaptivePalette;
+	private int uniAdaptiveColors;
 
 	// Full frame: scene + UI, UI coverage in alpha
 	private int fboFrame;
@@ -109,6 +115,10 @@ class PainterlyPass
 		uniSpriteShadowCount = glGetUniformLocation(program, "spriteShadowCount");
 		uniInvProjectionMatrix = glGetUniformLocation(program, "invProjectionMatrix");
 		uniCameraPos = glGetUniformLocation(program, "cameraPos");
+		uniAdaptivePalette = glGetUniformLocation(program, "adaptivePalette");
+		uniAdaptiveColors = glGetUniformLocation(program, "adaptiveColors");
+
+		adaptivePalette.compile(template);
 
 		// Core profiles need a bound VAO to draw, even though the triangle comes from gl_VertexID
 		vaoEmpty = glGenVertexArrays();
@@ -116,6 +126,7 @@ class PainterlyPass
 
 	void destroyShaders()
 	{
+		adaptivePalette.destroy();
 		if (program != 0)
 		{
 			glDeleteProgram(program);
@@ -210,6 +221,15 @@ class PainterlyPass
 		}
 		capturingFrame = false;
 
+		glDisable(GL_DEPTH_TEST);
+		glDisable(GL_BLEND);
+		glDisable(GL_CULL_FACE);
+
+		// MS Paint with a color count picks its palette from this frame
+		int colors = config.painterlyStyle() == PainterlyStyle.MS_PAINT ? config.painterlyHueSteps() : 0;
+		int paletteTexture = colors > 0 ?
+			adaptivePalette.update(fboFrame, frameWidth, frameHeight, colors, UNIT_PALETTE_WORK) : 0;
+
 		glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
 		glViewport(0, 0, frameWidth, frameHeight);
 		glDisable(GL_DEPTH_TEST);
@@ -232,6 +252,8 @@ class PainterlyPass
 		glUniform1f(uniCanvasStrength, config.painterlyCanvasStrength() / 100f);
 		glUniform1i(uniHueSteps, config.painterlyHueSteps());
 		glUniform1i(uniSpriteShadowCount, 0);
+		glUniform1i(uniAdaptivePalette, UNIT_PALETTE);
+		glUniform1i(uniAdaptiveColors, paletteTexture != 0 ? Math.min(colors, AdaptivePalette.MAX_COLORS) : 0);
 		if (invProjection != null)
 		{
 			glUniformMatrix4fv(uniInvProjectionMatrix, false, invProjection);
@@ -242,6 +264,8 @@ class PainterlyPass
 		glBindTexture(GL_TEXTURE_2D, texFrame);
 		glActiveTexture(GL_TEXTURE0 + UNIT_DEPTH);
 		glBindTexture(GL_TEXTURE_2D, texDepth);
+		glActiveTexture(GL_TEXTURE0 + UNIT_PALETTE);
+		glBindTexture(GL_TEXTURE_2D, paletteTexture);
 		glActiveTexture(GL_TEXTURE0);
 
 		glBindVertexArray(vaoEmpty);
@@ -390,6 +414,7 @@ class PainterlyPass
 	{
 		destroyFrameTarget();
 		destroyDepthTarget();
+		adaptivePalette.destroyTargets();
 		capturingFrame = false;
 		// Recreating the scene FBO (e.g. changing anti-aliasing) gets a fresh attempt
 		targetsBroken = false;

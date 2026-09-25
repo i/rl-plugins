@@ -12,12 +12,16 @@ tones the style down on the interface if text gets hard to read.
 | Style | Look |
 |---|---|
 | Squiggle Vision | Wobbly, redrawn outlines over flat shaded fills (Home Movies) |
-| MS Paint | 28-colour palette, chunky pixels, hard black outlines |
+| MS Paint | Chunky pixels and hard black outlines, in the classic 28-colour palette or, with **Colors** set, that many colours picked to fit the scene |
 | Oil painting | Kuwahara brush smoothing on a woven canvas |
-| Acrylic painting | Flat, saturated paint with thin dark line work on canvas; Hue steps limits the paints |
+| Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
 to the screen in one full-screen pass that also reads the scene's depth for outlines.
+
+MS Paint's adaptive palette is picked on the GPU with k-means clustering in OKLab: each frame is
+shrunk to 64x36 samples, and last frame's palette takes one clustering step towards them, so colours
+follow the view smoothly instead of flickering. Code: `AdaptivePalette.java` and `palette_frag.glsl`.
 
 Code: `PainterlyPass.java` (the pass) and `painterly_frag.glsl` (the styles). Its per-pixel cost
 is a few dozen texture reads; Kuwahara reads land between pixel pairs, so each averages a 2x2

@@ -131,11 +131,13 @@ public interface LofiConfig extends Config
 		return 35;
 	}
 
-	@Range(min = 0, max = 36)
+	@Range(min = 0, max = AdaptivePalette.MAX_COLORS)
 	@ConfigItem(
 		keyName = "painterlyHueSteps",
-		name = "Hue steps (Acrylic)",
-		description = "Acrylic painting only: how many distinct hues the paint uses. Fewer looks more hand-mixed. 0 is unlimited.",
+		name = "Colors (Acrylic, MS Paint)",
+		description = "Acrylic painting: how many distinct hues the paint uses, fewer looks more hand-mixed. " +
+			"MS Paint: how many colors to paint with, picked to best fit what's on screen. 0 is unlimited hues " +
+			"for Acrylic and the classic 28-color palette for MS Paint.",
 		position = 6,
 		section = painterlySettings
 	)
