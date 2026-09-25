@@ -14,7 +14,7 @@ repositories {
 }
 
 // The renderer is a copy of RuneLite's GPU plugin, which tracks the client's newest draw callback API
-def runeLiteVersion = '1.12.+'
+def runeLiteVersion = '1.13.+'
 def pluginMainClass = 'com.github.i.lofi.LofiPluginTest'
 
 dependencies {

@@ -51,7 +51,9 @@ JAVA_HOME=/path/to/jdk-21 ./gradlew run
 ```
 
 The renderer tracks RuneLite master's GPU plugin (copied at a5c2494), so the build uses the newest
-1.12 client.
+development client (`1.13.+`). When RuneLite starts a new version line, bump `runeLiteVersion`:
+the old snapshot stops getting game updates, and interactions such as mining or talking to NPCs
+silently stop working in the dev client.
 
 ## Credits
 
