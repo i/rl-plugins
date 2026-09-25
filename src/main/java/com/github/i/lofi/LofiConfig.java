@@ -121,8 +121,8 @@ public interface LofiConfig extends Config
 	@Range(min = 0, max = 100)
 	@ConfigItem(
 		keyName = "painterlyCanvasStrength",
-		name = "Paper texture",
-		description = "Strength of the paper or canvas grain.",
+		name = "Paper texture (not MS Paint)",
+		description = "Strength of the paper or canvas grain. MS Paint stays flat, like a real paint program.",
 		position = 5,
 		section = painterlySettings
 	)
@@ -134,7 +134,7 @@ public interface LofiConfig extends Config
 	@Range(min = 0, max = 36)
 	@ConfigItem(
 		keyName = "painterlyHueSteps",
-		name = "Hue steps",
+		name = "Hue steps (Acrylic)",
 		description = "Acrylic painting only: how many distinct hues the paint uses. Fewer looks more hand-mixed. 0 is unlimited.",
 		position = 6,
 		section = painterlySettings
