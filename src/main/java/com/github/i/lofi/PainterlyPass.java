@@ -301,6 +301,7 @@ class PainterlyPass
 		// Linear, so sub-pixel wobble offsets move smoothly and Kuwahara reads can average 2x2 blocks
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glActiveTexture(GL_TEXTURE0);
 
 		fboFrame = createFramebuffer(GL_COLOR_ATTACHMENT0, texFrame, defaultFramebuffer);
 		if (fboFrame == 0)
@@ -329,6 +330,7 @@ class PainterlyPass
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32F, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glActiveTexture(GL_TEXTURE0);
 
 		fboDepth = createFramebuffer(GL_DEPTH_ATTACHMENT, texDepth, defaultFramebuffer);
 		if (fboDepth == 0)
@@ -340,6 +342,10 @@ class PainterlyPass
 		return true;
 	}
 
+	/**
+	 * Creates a texture and leaves it bound with its unit active, so the caller can set it up. The caller must
+	 * switch back to GL_TEXTURE0 afterwards, which the UI pass expects.
+	 */
 	private static int createTexture(int unit)
 	{
 		int texture = glGenTextures();
@@ -347,7 +353,6 @@ class PainterlyPass
 		glBindTexture(GL_TEXTURE_2D, texture);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-		glActiveTexture(GL_TEXTURE0);
 		return texture;
 	}
 
