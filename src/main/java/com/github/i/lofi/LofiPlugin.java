@@ -1540,7 +1540,17 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		// Texture on UI
 		drawUi(overlayColor, canvasHeight, canvasWidth);
 
-		painterlyPass.endFrame(defaultFbo);
+		// An exception here would unwind into the client's frame and skip the rest of it, which breaks things like
+		// NPC and object interactions without any visible error
+		try
+		{
+			painterlyPass.endFrame(defaultFbo);
+		}
+		catch (RuntimeException ex)
+		{
+			painterlyPass.fail(ex);
+			glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		}
 
 		try
 		{

@@ -75,6 +75,8 @@ class PainterlyPass
 	private int depthHeight;
 
 	private boolean targetsBroken;
+	// The style that was active when the pass failed, so picking another style retries
+	private PainterlyStyle failedStyle;
 	private boolean capturingFrame;
 	private boolean frameHasDepth;
 
@@ -174,6 +176,11 @@ class PainterlyPass
 	)
 	{
 		capturingFrame = false;
+		if (failedStyle != null && failedStyle != config.painterlyStyle())
+		{
+			failedStyle = null;
+			targetsBroken = false;
+		}
 		if (config.painterlyStyle() == PainterlyStyle.OFF || program == 0 || targetsBroken)
 		{
 			return defaultFramebuffer;
@@ -188,6 +195,21 @@ class PainterlyPass
 		glBindFramebuffer(GL_FRAMEBUFFER, fboFrame);
 		capturingFrame = true;
 		return fboFrame;
+	}
+
+	/**
+	 * Turns the art style off after an exception, logging it once, until the style setting changes or the targets
+	 * are recreated. A style that throws every frame would otherwise disrupt every frame.
+	 */
+	void fail(RuntimeException ex)
+	{
+		capturingFrame = false;
+		if (!targetsBroken)
+		{
+			log.error("Art style pass failed, rendering without an art style", ex);
+		}
+		targetsBroken = true;
+		failedStyle = config.painterlyStyle();
 	}
 
 	boolean isCapturingFrame()
