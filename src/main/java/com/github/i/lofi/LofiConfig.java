@@ -34,12 +34,141 @@ import static com.github.i.lofi.LofiPlugin.MAX_DISTANCE;
 import static com.github.i.lofi.LofiPlugin.MAX_FOG_DEPTH;
 import com.github.i.lofi.config.AntiAliasingMode;
 import com.github.i.lofi.config.ColorBlindMode;
+import com.github.i.lofi.config.PainterlyDebugView;
+import com.github.i.lofi.config.PainterlyStyle;
 import com.github.i.lofi.config.UIScalingMode;
 
 @ConfigGroup(LofiConfig.GROUP)
 public interface LofiConfig extends Config
 {
 	String GROUP = "lofi";
+
+	/*====== Art style ======*/
+
+	@ConfigSection(
+		name = "Art style",
+		description = "Hand-drawn art styles applied to the whole frame. HUD strength controls how much the interface gets.",
+		position = -1
+	)
+	String painterlySettings = "painterlySettings";
+
+	@ConfigItem(
+		keyName = "painterlyStyle",
+		name = "Art style",
+		description = "Post-processing style applied to the 3D scene.",
+		position = 0,
+		section = painterlySettings
+	)
+	default PainterlyStyle painterlyStyle()
+	{
+		return PainterlyStyle.SQUIGGLE;
+	}
+
+	@Range(min = 1, max = 6)
+	@ConfigItem(
+		keyName = "painterlyLineWidth",
+		name = "Outline thickness",
+		description = "Thickness of the drawn outlines, in scene pixels.",
+		position = 1,
+		section = painterlySettings
+	)
+	default int painterlyLineWidth()
+	{
+		return 2;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "painterlyWobble",
+		name = "Wobble",
+		description = "How far lines and fills squiggle. 0% keeps everything still.",
+		position = 2,
+		section = painterlySettings
+	)
+	default int painterlyWobble()
+	{
+		return 50;
+	}
+
+	@Range(min = 1, max = 24)
+	@ConfigItem(
+		keyName = "painterlyBoilRate",
+		name = "Redraws per second",
+		description = "How many times per second the wobble pattern changes. Lower feels more hand-animated.",
+		position = 3,
+		section = painterlySettings
+	)
+	default int painterlyBoilRate()
+	{
+		return 8;
+	}
+
+	@Range(min = 0, max = 8)
+	@ConfigItem(
+		keyName = "painterlyPaintRadius",
+		name = "Brush size",
+		description = "Size of the flattening brush, or pixel size in MS Paint style. Larger values cost more GPU.",
+		position = 4,
+		section = painterlySettings
+	)
+	default int painterlyPaintRadius()
+	{
+		return 3;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "painterlyCanvasStrength",
+		name = "Paper texture",
+		description = "Strength of the paper or canvas grain.",
+		position = 5,
+		section = painterlySettings
+	)
+	default int painterlyCanvasStrength()
+	{
+		return 35;
+	}
+
+	@Range(min = 0, max = 36)
+	@ConfigItem(
+		keyName = "painterlyHueSteps",
+		name = "Hue steps",
+		description = "Acrylic painting only: how many distinct hues the paint uses. Fewer looks more hand-mixed. 0 is unlimited.",
+		position = 6,
+		section = painterlySettings
+	)
+	default int painterlyHueSteps()
+	{
+		return 12;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "painterlyHudStrength",
+		name = "HUD strength",
+		description = "How strongly the art style applies to the HUD, chat and overlays. Lower keeps text more readable.",
+		position = 7,
+		section = painterlySettings
+	)
+	default int painterlyHudStrength()
+	{
+		return 100;
+	}
+
+	@ConfigItem(
+		keyName = "painterlyDebugView",
+		name = "Debug view",
+		description = "Show an intermediate step of the art style instead of the final image, for tuning.",
+		position = 8,
+		section = painterlySettings
+	)
+	default PainterlyDebugView painterlyDebugView()
+	{
+		return PainterlyDebugView.OFF;
+	}
 
 	/*====== Lo-fi audio ======*/
 

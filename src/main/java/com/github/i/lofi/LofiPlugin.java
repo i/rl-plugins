@@ -125,6 +125,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private LofiAudio lofiAudio;
 
 	@Inject
+	private PainterlyPass painterlyPass;
+
+	@Inject
 	private TextureManager textureManager;
 
 	@Inject
@@ -627,6 +630,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		Template template = createTemplate();
 		glProgram = PROGRAM.compile(template);
 		glUiProgram = UI_PROGRAM.compile(template);
+		painterlyPass.compile(template);
 
 		glBindVertexArray(0);
 
@@ -667,6 +671,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 		glDeleteProgram(glUiProgram);
 		glUiProgram = 0;
+
+		painterlyPass.destroyShaders();
 	}
 
 	private void initVao()
@@ -826,6 +832,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 	private void shutdownFbo()
 	{
+		painterlyPass.destroyTargets();
 		if (fboScene != -1)
 		{
 			glDeleteFramebuffers(fboScene);
@@ -1017,6 +1024,11 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		Mat4.mul(projectionMatrix, Mat4.translate(-cameraX, -cameraY, -cameraZ));
 		glUniformMatrix4fv(uniWorldProj, false, projectionMatrix);
 
+		// The art style pass rebuilds scene positions from depth with this camera
+		int[] viewport = new int[4];
+		glGetIntegerv(GL_VIEWPORT, viewport);
+		painterlyPass.setSceneCamera(viewport, projectionMatrix, cameraX, cameraY, cameraZ);
+
 		glUniformMatrix4fv(uniEntityProj, false, IDENTITY);
 
 		glUniform4i(uniEntityTint, 0, 0, 0, 0);
@@ -1093,7 +1105,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		sceneFboValid = true;
 	}
 
-	private void blitSceneFbo()
+	private void blitSceneFbo(int targetFbo)
 	{
 		int width = lastStretchedCanvasWidth;
 		int height = lastStretchedCanvasHeight;
@@ -1104,14 +1116,13 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		width = getScaledValue(transform.getScaleX(), width);
 		height = getScaledValue(transform.getScaleY(), height);
 
-		int defaultFbo = awtContext.getFramebuffer(false);
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
-		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFbo);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFbo);
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
 			GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
 		// Reset
-		glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFbo);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, targetFbo);
 
 		checkGLErrors();
 	}
@@ -1504,16 +1515,32 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 		prepareInterfaceTexture(canvasWidth, canvasHeight);
 
+		// With an art style active, the scene and UI are drawn offscreen, then painted to the screen
+		final int defaultFbo = awtContext.getFramebuffer(false);
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
+		final Dimension frameSize = client.isStretchedEnabled() ? client.getStretchedDimensions() : new Dimension(canvasWidth, canvasHeight);
+		final int frameFbo = painterlyPass.beginFrame(
+			defaultFbo,
+			getScaledValue(transform.getScaleX(), frameSize.width),
+			getScaledValue(transform.getScaleY(), frameSize.height),
+			sceneFboValid ? fboScene : -1
+		);
+		glBindFramebuffer(GL_FRAMEBUFFER, frameFbo);
+
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		if (sceneFboValid)
 		{
-			blitSceneFbo();
+			blitSceneFbo(frameFbo);
 		}
+		painterlyPass.clearCoverage();
 
 		// Texture on UI
 		drawUi(overlayColor, canvasHeight, canvasWidth);
+
+		painterlyPass.endFrame(defaultFbo);
 
 		try
 		{
