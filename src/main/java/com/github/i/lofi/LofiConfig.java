@@ -27,7 +27,9 @@ package com.github.i.lofi;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
+import net.runelite.client.config.Units;
 import static com.github.i.lofi.LofiPlugin.MAX_DISTANCE;
 import static com.github.i.lofi.LofiPlugin.MAX_FOG_DEPTH;
 import com.github.i.lofi.config.AntiAliasingMode;
@@ -38,6 +40,97 @@ import com.github.i.lofi.config.UIScalingMode;
 public interface LofiConfig extends Config
 {
 	String GROUP = "lofi";
+
+	/*====== Lo-fi audio ======*/
+
+	@ConfigSection(
+		name = "Lo-fi audio",
+		description = "Plays the game's audio slower, with a gentle tape-style wobble in pitch and speed.",
+		position = 100
+	)
+	String lofiAudioSettings = "lofiAudioSettings";
+
+	@ConfigItem(
+		keyName = "lofiAudio",
+		name = "Lo-fi audio",
+		description = "Slow the game's audio down and let it wobble, like a worn tape.",
+		position = 0,
+		section = lofiAudioSettings
+	)
+	default boolean lofiAudio()
+	{
+		return true;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 70, max = 100)
+	@ConfigItem(
+		keyName = "lofiSpeed",
+		name = "Playback speed",
+		description = "Average speed compared to normal. Lower is slower and deeper.",
+		position = 1,
+		section = lofiAudioSettings
+	)
+	default int lofiSpeed()
+	{
+		return 92;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "lofiWobble",
+		name = "Wobble",
+		description = "How much the speed drifts slower and faster around the average. 100% drifts about 3.5% each way.",
+		position = 2,
+		section = lofiAudioSettings
+	)
+	default int lofiWobble()
+	{
+		return 50;
+	}
+
+	@Units(Units.PERCENT)
+	@Range(min = 0, max = 100)
+	@ConfigItem(
+		keyName = "lofiSaturation",
+		name = "Tape saturation",
+		description = "Warms the sound by gently rounding off loud peaks, like overdriven tape. 0% is clean.",
+		position = 3,
+		section = lofiAudioSettings
+	)
+	default int lofiSaturation()
+	{
+		return 30;
+	}
+
+	@Units(" Hz")
+	@Range(min = 0, max = 500)
+	@ConfigItem(
+		keyName = "lofiLowCut",
+		name = "Low cut",
+		description = "Gently rolls off bass below this frequency, like a small speaker. 0 is off.",
+		position = 4,
+		section = lofiAudioSettings
+	)
+	default int lofiLowCut()
+	{
+		return 80;
+	}
+
+	@Units(" Hz")
+	@Range(min = 0, max = 20000)
+	@ConfigItem(
+		keyName = "lofiHighCut",
+		name = "High cut",
+		description = "Gently rolls off treble above this frequency, for a muffled tape sound. Lower is darker. 0 is off.",
+		position = 5,
+		section = lofiAudioSettings
+	)
+	default int lofiHighCut()
+	{
+		return 6000;
+	}
 
 	@Range(
 		max = MAX_DISTANCE

@@ -71,6 +71,7 @@ import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.PluginInstantiationException;
 import net.runelite.client.plugins.PluginManager;
+import com.github.i.lofi.audio.LofiAudio;
 import com.github.i.lofi.config.AntiAliasingMode;
 import com.github.i.lofi.config.UIScalingMode;
 import com.github.i.lofi.template.Template;
@@ -119,6 +120,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 	@Inject
 	private LofiConfig config;
+
+	@Inject
+	private LofiAudio lofiAudio;
 
 	@Inject
 	private TextureManager textureManager;
@@ -281,6 +285,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Override
 	protected void startUp()
 	{
+		// Audio doesn't depend on the renderer, so it runs even if the GPU side fails to start
+		lofiAudio.startUp();
 		root = new SceneContext(NUM_ZONES, NUM_ZONES);
 		subs = new SceneContext[MAX_WORLDVIEWS];
 		int numThreads = config.numThreads();
@@ -445,6 +451,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Override
 	protected void shutDown()
 	{
+		lofiAudio.shutDown();
 		clientThread.invoke(() ->
 		{
 			client.setGpuFlags(0);
