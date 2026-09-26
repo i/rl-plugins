@@ -61,6 +61,7 @@ import net.runelite.api.WorldEntity;
 import net.runelite.api.WorldView;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.HitsplatApplied;
 import net.runelite.api.events.OverheadTextChanged;
 import net.runelite.api.events.PostHealthBarConfig;
 import net.runelite.api.events.PostClientTick;
@@ -304,11 +305,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private HealthBarOverlay healthBarOverlay;
 
+	@Inject
+	private HitsplatOverlay hitsplatOverlay;
+
 	@Override
 	protected void startUp()
 	{
 		overlayManager.add(chatBubbleOverlay);
 		overlayManager.add(healthBarOverlay);
+		overlayManager.add(hitsplatOverlay);
 		// Reload the game's bars, so ones already loaded get hidden too
 		clientThread.invoke(client::resetHealthBarCaches);
 		// Audio doesn't depend on the renderer, so it runs even if the GPU side fails to start
@@ -480,6 +485,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	{
 		overlayManager.remove(chatBubbleOverlay);
 		overlayManager.remove(healthBarOverlay);
+		overlayManager.remove(hitsplatOverlay);
+		hitsplatOverlay.clear();
 		// Reload the game's bars unblanked
 		clientThread.invoke(client::resetHealthBarCaches);
 		chatBubbleOverlay.clear();
@@ -1473,6 +1480,12 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		{
 			chatBubbleOverlay.show(event.getActor(), event.getOverheadText());
 		}
+	}
+
+	@Subscribe
+	public void onHitsplatApplied(HitsplatApplied event)
+	{
+		hitsplatOverlay.add(event.getActor(), event.getHitsplat());
 	}
 
 	@Subscribe

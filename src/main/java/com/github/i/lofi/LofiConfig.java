@@ -189,7 +189,7 @@ public interface LofiConfig extends Config
 	@ConfigItem(
 		keyName = "blockyHealthBars",
 		name = "Blocky health bars",
-		description = "Draw taller health bars as green blocks over red, wider for things with more hitpoints.",
+		description = "Draw taller health bars as green blocks over red, wider for things with more hitpoints, and hitsplats as matching tiles.",
 		position = 10,
 		section = painterlySettings
 	)

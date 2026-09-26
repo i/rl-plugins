@@ -46,8 +46,12 @@ with taller ones: a row of green blocks for the health left, then solid red for 
 Bars are wider for things with more total hitpoints, growing with its square root from 24 to 160
 pixels, with one block per hitpoint when they fit. NPC hitpoints come from RuneLite's NPC data and
 yours from your Hitpoints level; other players don't share theirs, so they get a 50 hp bar. The
-game's bars are hidden by blanking their sprites as the client loads them. Code:
-`HealthBarOverlay.java`.
+game's bars are hidden by blanking their sprites as the client loads them.
+
+The same setting draws hitsplats as matching square tiles, coloured by type (red damage, blue
+block, green poison, pink heal and so on), with a gold rim on max hits and darker tiles for other
+players' hits. The API can't hide the game's hitsplats, so each tile is drawn opaque over the slot
+the game uses, big enough to cover its splat. Code: `HealthBarOverlay.java`, `HitsplatOverlay.java`.
 
 ## Sprites
 
