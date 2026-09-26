@@ -12,7 +12,8 @@ public enum PainterlyStyle {
 	SQUIGGLE("Squiggle Vision", 1),
 	MS_PAINT("MS Paint", 2),
 	OIL("Oil painting", 3),
-	ACRYLIC("Acrylic painting", 4);
+	ACRYLIC("Acrylic painting", 4),
+	WATERCOLOR("Watercolor", 5);
 
 	private final String name;
 

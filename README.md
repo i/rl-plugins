@@ -15,6 +15,7 @@ tones the style down on the interface if text gets hard to read.
 | MS Paint | Chunky pixels and hard black outlines, in the classic 28-colour palette or, with **Colors** set, that many colours picked to fit the scene |
 | Oil painting | Kuwahara brush smoothing on a woven canvas |
 | Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
+| Watercolor | Loose, blotchy washes that bleed past a light pencil sketch, with darker rims, on paper |
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
 to the screen in one full-screen pass that also reads the scene's depth for outlines. Players and

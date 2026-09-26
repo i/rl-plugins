@@ -8,6 +8,7 @@
 #define STYLE_MS_PAINT 2
 #define STYLE_OIL 3
 #define STYLE_ACRYLIC 4
+#define STYLE_WATERCOLOR 5
 
 // Debug view ids must match rs117.hd.config.PainterlyDebugView.
 #define DEBUG_SCENE 1
@@ -463,6 +464,39 @@ vec3 acrylicPainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(paint, 0.0, 1.0), mix(0.5, canvasWeave(screenPx), canvasStrength));
 }
 
+// Loose watercolor washes over a light pencil sketch on paper.
+vec3 watercolor(vec2 px, vec2 screenPx) {
+    // Washes bleed past the lines and fall short of them: sample color from a slowly wandering offset, a few
+    // times wider than the line wobble, so fills and outlines don't line up
+    vec2 bleed = wobbleOffset(px, 1.0 / 70.0) * 2.5 + wobbleOffset(px, 1.0 / 23.0) * 0.8;
+    vec2 washPx = px + bleed;
+    vec3 wash = kuwahara(washPx, max(paintRadius, 2));
+    wash = limitPaints(adjustSaturation(wash, 0.9));
+
+    // Watercolor dries darker at the rim of each wash: darken where the washed color changes nearby
+    vec2 step = vec2(2.5, 0.0);
+    vec3 dx = sampleColor(washPx + step.xy) - sampleColor(washPx - step.xy);
+    vec3 dy = sampleColor(washPx + step.yx) - sampleColor(washPx - step.yx);
+    float rim = smoothstep(0.04, 0.25, length(dx) + length(dy));
+    wash *= 1.0 - 0.22 * rim;
+
+    // Uneven pigment: large soft blotches and finer mottling. Thin areas let the paper through.
+    float blotches = valueNoise(px / 48.0 + boilTime * 3.1) * 0.65 + valueNoise(px / 14.0 - boilTime * 1.7) * 0.35;
+    float density = mix(0.62, 1.08, blotches);
+    // Highlights stay mostly paper, like light washes
+    density *= mix(1.0, 0.8, smoothstep(0.55, 0.95, luma(wash)));
+    vec3 color = mix(vec3(1.0), wash, clamp(density, 0.0, 1.0));
+
+    // A light pencil sketch underneath, following the real edges rather than the washes
+    float line = outline(px + wobbleOffset(px, 1.0 / 40.0) * 0.4, lineWidth);
+    color = mix(color, color * vec3(0.32, 0.30, 0.34), line * 0.55);
+
+    // Cold-press paper: granulation where pigment settles into the grain, then the paper texture itself
+    float grain = paperGrain(screenPx);
+    color *= 1.0 - (0.5 - grain) * 0.18 * canvasStrength * density;
+    return softLight(clamp(color, 0.0, 1.0), mix(0.5, grain, canvasStrength));
+}
+
 void main() {
     vec2 px = fUv * resolution;
     vec2 screenPx = gl_FragCoord.xy;
@@ -491,6 +525,8 @@ void main() {
         color = oilPainting(px, screenPx);
     } else if (style == STYLE_ACRYLIC) {
         color = acrylicPainting(px, screenPx);
+    } else if (style == STYLE_WATERCOLOR) {
+        color = watercolor(px, screenPx);
     } else {
         color = squiggleVision(px, screenPx);
     }
