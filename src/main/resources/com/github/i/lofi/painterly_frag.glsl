@@ -599,13 +599,14 @@ float cutoutLayer(float id) {
     return id > OBJECT_GROUND ? 2.0 : 3.0;
 }
 
-// Whether piece a (id, distance) lies on top of piece b. Within a layer, the nearer piece wins.
+// Whether piece a (id, distance) visibly lies on top of piece b: a higher layer, or clearly nearer within a layer.
+// Touching pieces at about the same depth, like neighboring wall segments, count as one sheet and aren't cut.
 bool onTop(vec2 a, vec2 b) {
     float la = cutoutLayer(a.x);
     float lb = cutoutLayer(b.x);
     if (la != lb)
         return la > lb;
-    return a.y < b.y;
+    return b.y - a.y > max(a.y * 0.08, 64.0);
 }
 
 vec2 cutoutPiece(vec2 px) {
@@ -645,7 +646,9 @@ vec3 paperCutout(vec2 px, vec2 screenPx) {
         if (neighbor.x != piece.x && onTop(piece, neighbor))
             edge = 1.0;
     }
-    color = mix(color, CUTOUT_EDGE_COLOR, edge * 0.85);
+    // Faint, and fading with distance, so the cuts separate pieces without dominating the frame
+    float edgeStrength = 0.45 * (1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, piece.y));
+    color = mix(color, CUTOUT_EDGE_COLOR, edge * edgeStrength);
 
     // A small soft shadow cast down and to the right by any piece lying on this one
     float shadow = 0.0;
@@ -655,7 +658,7 @@ vec3 paperCutout(vec2 px, vec2 screenPx) {
         if (caster.x != piece.x && onTop(caster, piece))
             shadow = max(shadow, 1.0 - float(i - 1) * 0.45);
     }
-    color *= 1.0 - 0.28 * shadow * (1.0 - edge);
+    color *= 1.0 - 0.3 * shadow * (1.0 - edge * edgeStrength);
 
     return clamp(color, 0.0, 1.0);
 }
