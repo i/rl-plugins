@@ -16,7 +16,7 @@ tones the style down on the interface if text gets hard to read.
 | Oil painting | Kuwahara brush smoothing on a woven canvas |
 | Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
 | Landscape painting | After Thomas Moran: warm light and cool shadows, distance fading into warm haze, a painted sky, detail up close and soft washes far away, faint lines only on characters and big depth jumps |
-| Paper cutout | Each object is a piece of coloured paper glued on top of what's behind it, like Archer: each with its own paper, a white cut edge, a small shadow onto the layer beneath, and a slight nudge out of place |
+| Paper cutout | Each object is a piece of coloured paper glued on top of what's behind it, like Archer: each with its own paper, a small shadow onto the layer beneath, and a slight nudge out of place |
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
 to the screen in one full-screen pass that also reads the scene's depth for outlines. Every vertex

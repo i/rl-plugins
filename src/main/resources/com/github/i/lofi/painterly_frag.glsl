@@ -646,8 +646,10 @@ vec3 paperCutout(vec2 px, vec2 screenPx) {
         if (neighbor.x != piece.x && onTop(piece, neighbor))
             edge = 1.0;
     }
-    // Faint, and fading with distance, so the cuts separate pieces without dominating the frame
-    float edgeStrength = 0.45 * (1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, piece.y));
+    // Only characters show a white cut edge, and only up close. White rims around every shape read as a selection
+    // highlight, so everything else is separated by its shadow and paper alone.
+    float nearFade = 1.0 - smoothstep(LINE_FADE_START * 0.5, LINE_FADE_START * 1.5, piece.y);
+    float edgeStrength = cutoutLayer(piece.x) == 3.0 ? 0.5 * nearFade : 0.0;
     color = mix(color, CUTOUT_EDGE_COLOR, edge * edgeStrength);
 
     // A small soft shadow cast down and to the right by any piece lying on this one
@@ -658,7 +660,9 @@ vec3 paperCutout(vec2 px, vec2 screenPx) {
         if (caster.x != piece.x && onTop(caster, piece))
             shadow = max(shadow, 1.0 - float(i - 1) * 0.45);
     }
-    color *= 1.0 - 0.3 * shadow * (1.0 - edge * edgeStrength);
+    // Shadows shrink away with distance too, so a zoomed-out view doesn't turn into a web of dark lines
+    float shadowFade = 1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, piece.y);
+    color *= 1.0 - 0.32 * shadow * shadowFade * (1.0 - edge * edgeStrength);
 
     return clamp(color, 0.0, 1.0);
 }
