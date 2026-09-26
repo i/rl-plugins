@@ -93,6 +93,8 @@ class ModelUploader
 	private SpriteManager.SpriteView sprite;
 	private float spriteWidth;
 	private final float[] spriteVertex = new float[3];
+	// Which faces of the model being sorted were reversed to fill holes, see uploadSortedModel
+	private final boolean[] spriteFlippedFaces = new boolean[MAX_FACE_COUNT];
 
 	/**
 	 * Flattens the following uploads into a sprite card, or stops flattening when {@code view} is null.
@@ -215,6 +217,7 @@ class ModelUploader
 				// Reversing the second and third vertex flips a face's winding, so a sprite face that turned away
 				// when flattened is drawn from behind rather than leaving a hole
 				boolean flipped = !facing && sprite != null;
+				spriteFlippedFaces[faceIdx] = flipped;
 				if (flipped)
 				{
 					int swap = v2;
@@ -314,6 +317,25 @@ class ModelUploader
 			}
 		}
 
+		// Sprites drawn without depth testing go in face order, and a reversed face keeps its priority, so an amulet
+		// or cape lining would draw over the body in front of it. Reversed faces go first, far to near, so they only
+		// show through the holes they fill.
+		if (sprite != null)
+		{
+			for (int i = maxFz; i >= minFz; --i)
+			{
+				for (char face = zsortHead[i]; face != (char) -1; face = zsortNext[face])
+				{
+					if (spriteFlippedFaces[face])
+					{
+						int offset = face * FACE_SIZE;
+						var b = (vertexBuffer[offset + 3] & 0xff000000) != 0 ? alphaBuffer : opaqueBuffer;
+						b.put(vertexBuffer, offset, FACE_SIZE);
+					}
+				}
+			}
+		}
+
 		int len = 0;
 		if (faceRenderPriorities == null || !prioritySort)
 		{
@@ -321,6 +343,10 @@ class ModelUploader
 			{
 				for (char face = zsortHead[i]; face != (char) -1; face = zsortNext[face])
 				{
+					if (sprite != null && spriteFlippedFaces[face])
+					{
+						continue;
+					}
 					int offset = face * FACE_SIZE;
 					var b = (vertexBuffer[offset + 3] & 0xff000000) != 0 ? alphaBuffer : opaqueBuffer;
 					b.put(vertexBuffer, offset, FACE_SIZE);
@@ -336,6 +362,10 @@ class ModelUploader
 			{
 				for (char face = zsortHead[i]; face != (char) -1; face = zsortNext[face])
 				{
+					if (sprite != null && spriteFlippedFaces[face])
+					{
+						continue;
+					}
 					final byte pri = faceRenderPriorities[face];
 					final int distIdx = numOfPriority[pri]++;
 
