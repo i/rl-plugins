@@ -311,6 +311,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private HitsplatOverlay hitsplatOverlay;
 
+	@Inject
+	private SpriteHighlights spriteHighlights;
+
 	@Override
 	protected void startUp()
 	{
@@ -862,7 +865,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		// Object id render buffer, written by frag.glsl's second output
 		rboObjectIdBuffer = glGenRenderbuffers();
 		glBindRenderbuffer(GL_RENDERBUFFER, rboObjectIdBuffer);
-		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_R8, width, height);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_R16, width, height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, rboObjectIdBuffer);
 		glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1});
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
@@ -1409,7 +1412,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE * (spriteView != null ? 2 : 1);
 		// Players and NPCs get outlined by their shape, whatever their colors, see PainterlyPass
 		int objectId = renderable instanceof Actor && scene.getWorldViewId() == WorldView.TOPLEVEL ?
-			1 + Math.floorMod(System.identityHashCode(renderable), 255) : 0;
+			characterId(renderable) : 0;
 		int renderMode = renderable.getRenderMode();
 		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0)
 		{
@@ -1712,6 +1715,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		final Dimension frameSize = client.isStretchedEnabled() ? client.getStretchedDimensions() : new Dimension(canvasWidth, canvasHeight);
 		final int screenWidth = getScaledValue(transform.getScaleX(), frameSize.width);
 		final int screenHeight = getScaledValue(transform.getScaleY(), frameSize.height);
+		spriteHighlights.update(spriteManager.getView() != null);
+		painterlyPass.setHighlights(spriteHighlights.getIds(), spriteHighlights.getColors(), spriteHighlights.getCount());
 		// The art style runs at the scene's render scale, then gets stretched to the screen
 		final int frameFbo = painterlyPass.beginFrame(
 			defaultFbo,
@@ -2395,6 +2400,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private int getScaledValue(final double scale, final int value)
 	{
 		return (int) (value * scale);
+	}
+
+	/**
+	 * The id a player or NPC is written with into the scene's object id buffer, 1-32767. It's stored in a spare
+	 * signed short of each vertex. Ids can collide, but rarely with this many.
+	 */
+	static int characterId(Object actor)
+	{
+		return 1 + Math.floorMod(System.identityHashCode(actor), 32767);
 	}
 
 	/** A size in framebuffer pixels at the scene's render scale, see {@link LofiConfig#renderScale}. */

@@ -56,6 +56,10 @@ uniform int adaptiveColors;       // how many adaptivePalette colors to use, 0 f
 // Round shadows under sprites, as (x, y, z, radius) in local scene space. Must match SpriteManager.MAX_SHADOWS.
 #define MAX_SPRITE_SHADOWS 32
 uniform int spriteShadowCount;
+#define MAX_HIGHLIGHTS 32
+uniform int highlightCount;                        // characters outlined this frame, see SpriteHighlights.java
+uniform float highlightIds[MAX_HIGHLIGHTS];        // their character ids
+uniform vec4 highlightColors[MAX_HIGHLIGHTS];      // and outline colors
 uniform vec4 spriteShadows[MAX_SPRITE_SHADOWS];
 
 in vec2 fUv;
@@ -160,14 +164,14 @@ bool scenePosition(vec2 px, out vec3 position) {
     return true;
 }
 
-// The object id under a pixel, 0-255: players and NPCs have their own, everything else is 0.
+// The object id under a pixel: players and NPCs have their own, 1-32767, everything else is 0.
 float objectId(vec2 px) {
     if (!hasDepth)
         return 0.0;
     vec2 uv = (px - sceneViewport.xy) / sceneViewport.zw;
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
         return 0.0;
-    return floor(texture(objectIds, uv).r * 255.0 + 0.5);
+    return floor(texture(objectIds, uv).r * 65535.0 + 0.5);
 }
 
 // Distance from the camera in game units, where one tile is 128 units.
@@ -591,6 +595,37 @@ vec3 landscapePainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(color, 0.0, 1.0), mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
+const float HIGHLIGHT_WIDTH = 2.0;
+
+// The outline color for a character id, or zero alpha if it isn't highlighted
+vec4 highlightColor(float id) {
+    vec4 found = vec4(0.0);
+    for (int i = 0; i < MAX_HIGHLIGHTS; i++) {
+        if (i >= highlightCount)
+            break;
+        if (highlightIds[i] == id)
+            found = highlightColors[i];
+    }
+    return found;
+}
+
+// Outlines highlighted characters, like RuneLite's model outlines but around the drawn sprite: pixels just
+// outside a highlighted character's shape take its color.
+vec3 highlight(vec2 px, vec3 color, float ui) {
+    if (highlightCount <= 0 || ui > 0.5)
+        return color;
+    float centerId = objectId(px);
+    for (int i = 0; i < 8; i++) {
+        float id = objectId(px + OUTLINE_DIRECTIONS[i] * HIGHLIGHT_WIDTH);
+        if (id == 0.0 || id == centerId)
+            continue;
+        vec4 outline = highlightColor(id);
+        if (outline.a > 0.0)
+            return mix(color, outline.rgb, outline.a);
+    }
+    return color;
+}
+
 void main() {
     vec2 px = fUv * resolution;
     vec2 screenPx = gl_FragCoord.xy;
@@ -632,5 +667,6 @@ void main() {
 
     // Sprite shadows sit on top of the painted ground, and never on the HUD
     color *= 1.0 - spriteShadow(px) * (1.0 - ui);
+    color = highlight(px, color, ui);
     FragColor = vec4(color, 1.0);
 }

@@ -296,6 +296,19 @@ public interface LofiConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		keyName = "spriteHighlights",
+		name = "Highlight outlines",
+		description = "Outline hovered and interacted characters, and NPCs highlighted by NPC Indicators, around their sprites. "
+			+ "Other plugins outline the hidden 3D model, so turn their outlines off while sprites are on.",
+		position = 7,
+		section = spriteSettings
+	)
+	default boolean spriteHighlights()
+	{
+		return true;
+	}
+
 	/*====== Lo-fi audio ======*/
 
 	@ConfigSection(

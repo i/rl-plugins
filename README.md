@@ -19,8 +19,8 @@ tones the style down on the interface if text gets hard to read.
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
 to the screen in one full-screen pass that also reads the scene's depth for outlines. Players and
-NPCs are also outlined by their shape: each gets an id from 1 to 255 in its vertices' spare short,
-the scene shader writes it to a second colour buffer, and the pass draws a line wherever it changes,
+NPCs are also outlined by their shape: each gets an id from 1 to 32767 in its vertices' spare short,
+the scene shader writes it to a second, 16-bit colour buffer, and the pass draws a line wherever it changes,
 so characters stay separate from ground of the same colour.
 
 MS Paint's adaptive palette is picked on the GPU with k-means clustering in OKLab: each frame is
@@ -80,7 +80,12 @@ front. Depth bias is skipped on sprites, since the card is far thinner than the 
 Limits: the game tests clicks against the real 3D model at its real facing, and that can't be
 turned off, so the renderer also click tests the sprite's own flattened shape: a sprite is
 clickable wherever it's drawn, plus wherever the hidden 3D model would be. Highlight outlines from
-other plugins still follow the 3D model. Actors on boats (other world views) stay 3D.
+other plugins still follow the 3D model. **Highlight outlines** (on by default) outlines sprites
+instead: the character under the mouse, the one you're interacting with, and NPCs highlighted by NPC
+Indicators, in its colour. The art style pass draws them around each character's pixels in the
+object id buffer, and NPC Indicators' list is read by reflection from RuneLite's `NpcOverlayService`.
+Turn off Interact Highlight's and NPC Indicators' own outlines while sprites are on. Code:
+`SpriteHighlights.java`. Actors on boats (other world views) stay 3D.
 
 Code: `SpriteManager.java` (facings and the flattening view) and `ModelUploader.java` (flattening
 during upload).

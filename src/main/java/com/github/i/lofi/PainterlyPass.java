@@ -68,6 +68,9 @@ class PainterlyPass
 	private int uniInvProjectionMatrix;
 	private int uniCameraPos;
 	private int uniObjectIds;
+	private int uniHighlightCount;
+	private int uniHighlightIds;
+	private int uniHighlightColors;
 	private int uniAdaptivePalette;
 	private int uniAdaptiveColors;
 
@@ -101,6 +104,11 @@ class PainterlyPass
 
 	// The scene camera of the frame being drawn, set by LofiPlugin before the scene draws
 	private final int[] sceneViewport = new int[4];
+
+	// Characters to outline this frame, see SpriteHighlights
+	private final float[] highlightIds = new float[SpriteHighlights.MAX];
+	private final float[] highlightColors = new float[SpriteHighlights.MAX * 4];
+	private int highlightCount;
 	private float[] invProjection;
 	private final float[] cameraPos = new float[3];
 
@@ -138,6 +146,9 @@ class PainterlyPass
 		uniInvProjectionMatrix = glGetUniformLocation(program, "invProjectionMatrix");
 		uniCameraPos = glGetUniformLocation(program, "cameraPos");
 		uniObjectIds = glGetUniformLocation(program, "objectIds");
+		uniHighlightCount = glGetUniformLocation(program, "highlightCount");
+		uniHighlightIds = glGetUniformLocation(program, "highlightIds");
+		uniHighlightColors = glGetUniformLocation(program, "highlightColors");
 		uniAdaptivePalette = glGetUniformLocation(program, "adaptivePalette");
 		uniAdaptiveColors = glGetUniformLocation(program, "adaptiveColors");
 
@@ -181,6 +192,21 @@ class PainterlyPass
 		cameraPos[2] = cameraZ;
 	}
 
+	/** Sets the characters to outline this frame, by id, with rgba colors. */
+	void setHighlights(
+		int[] ids,
+		float[] colors,
+		int count
+	)
+	{
+		highlightCount = Math.min(count, SpriteHighlights.MAX);
+		for (int i = 0; i < highlightCount; i++)
+		{
+			highlightIds[i] = ids[i];
+		}
+		System.arraycopy(colors, 0, highlightColors, 0, highlightCount * 4);
+	}
+
 	/**
 	 * Starts a frame and returns the framebuffer the scene and UI should be drawn into.
 	 *
@@ -202,8 +228,8 @@ class PainterlyPass
 			failedStyle = null;
 			targetsBroken = false;
 		}
-		// Round sprite shadows are drawn by this pass, so it also runs with the art style off
-		boolean needed = config.painterlyStyle() != PainterlyStyle.OFF || spriteManager.isRoundShadowsEnabled();
+		// Round sprite shadows and sprite highlights are drawn by this pass, so it also runs with the art style off
+		boolean needed = config.painterlyStyle() != PainterlyStyle.OFF || spriteManager.isRoundShadowsEnabled() || highlightCount > 0;
 		if (!needed || program == 0 || targetsBroken)
 		{
 			return defaultFramebuffer;
@@ -316,6 +342,12 @@ class PainterlyPass
 		if (shadowCount > 0)
 		{
 			glUniform4fv(uniSpriteShadows, spriteShadows);
+		}
+		glUniform1i(uniHighlightCount, frameHasDepth ? highlightCount : 0);
+		if (highlightCount > 0)
+		{
+			glUniform1fv(uniHighlightIds, highlightIds);
+			glUniform4fv(uniHighlightColors, highlightColors);
 		}
 		glUniform1i(uniAdaptivePalette, UNIT_PALETTE);
 		glUniform1i(uniAdaptiveColors, paletteTexture != 0 ? Math.min(colors, AdaptivePalette.MAX_COLORS) : 0);
@@ -488,7 +520,7 @@ class PainterlyPass
 		}
 
 		texObjectId = createTexture(UNIT_OBJECT_ID);
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, 0);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R16, width, height, 0, GL_RED, GL_UNSIGNED_SHORT, 0);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 		glActiveTexture(GL_TEXTURE0);
