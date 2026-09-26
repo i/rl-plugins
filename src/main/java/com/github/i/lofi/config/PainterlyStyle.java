@@ -13,7 +13,8 @@ public enum PainterlyStyle {
 	MS_PAINT("MS Paint", 2),
 	OIL("Oil painting", 3),
 	ACRYLIC("Acrylic painting", 4),
-	WATERCOLOR("Watercolor", 5);
+	// Kept as WATERCOLOR so saved settings from when it was the watercolor style still load
+	WATERCOLOR("Landscape painting", 5);
 
 	private final String name;
 

@@ -8,7 +8,7 @@
 #define STYLE_MS_PAINT 2
 #define STYLE_OIL 3
 #define STYLE_ACRYLIC 4
-#define STYLE_WATERCOLOR 5
+#define STYLE_LANDSCAPE 5
 
 // Debug view ids must match rs117.hd.config.PainterlyDebugView.
 #define DEBUG_SCENE 1
@@ -207,7 +207,8 @@ float luma(vec3 color) {
 
 // 0..1 outline coverage. Silhouettes come from depth jumps, inner lines from color jumps.
 // Each test is one-sided (only the nearer or darker pixel draws), so lines are lineWidth thick, not double.
-float outline(vec2 px, float width) {
+// colorWeight and depthWeight scale color and depth lines; character shapes are always outlined in full.
+float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight) {
     float centerDistance = viewDistance(px);
     // Color and UI coverage come from one read: rgb is the frame, alpha the HUD coverage
     vec4 center = texture(sceneColor, px / resolution);
@@ -237,9 +238,13 @@ float outline(vec2 px, float width) {
 
         float nearest = min(centerDistance, neighborDistance);
         float fade = mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui);
-        edge = max(edge, max(max(depthEdge, colorEdge), objectEdge) * fade);
+        edge = max(edge, max(max(depthEdge * depthWeight, colorEdge * colorWeight), objectEdge) * fade);
     }
     return edge;
+}
+
+float outline(vec2 px, float width) {
+    return outlineWeighted(px, width, 1.0, 1.0);
 }
 
 // Generalized Kuwahara: average the quadrant around px with the least color variance.
@@ -464,55 +469,74 @@ vec3 acrylicPainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(paint, 0.0, 1.0), mix(0.5, canvasWeave(screenPx), canvasStrength));
 }
 
-// Loose watercolor washes over a light pencil sketch on paper.
-//
-// The scene is repainted as a few flat washes rather than tinted, and the pigment's blotches are pinned to the
-// world's surfaces, so they move with the scene like paint on the objects instead of sitting on the screen.
-vec3 watercolor(vec2 px, vec2 screenPx) {
-    // Washes bleed past the lines and fall short of them: sample color from a wandering offset, several times
-    // wider than the line wobble, so fills and outlines don't line up
-    vec2 bleed = wobbleOffset(px, 1.0 / 90.0) * 3.5 + wobbleOffset(px, 1.0 / 30.0) * 1.0;
-    vec2 washPx = px + bleed;
+// 19th century landscape painting, after Thomas Moran: warm light and cool shadows, distance fading into warm
+// haze, a painted sky, detail up close and soft washes far away, and forms shaped by light rather than lines.
+const vec3 LANDSCAPE_HAZE = vec3(0.93, 0.86, 0.70);
+const vec3 LANDSCAPE_WARM = vec3(1.10, 0.99, 0.80);
+const vec3 LANDSCAPE_COOL = vec3(0.80, 0.92, 1.02);
+const float LANDSCAPE_HAZE_START = 1200.0;
+const float LANDSCAPE_HAZE_END = 7000.0;
 
-    // A few flat tones per wash: heavy smoothing, then snap brightness so detail becomes broad areas of color
-    vec3 wash = kuwahara(washPx, max(paintRadius, 3));
-    wash = limitPaints(adjustSaturation(wash, 0.95));
-    wash = flattenShades(wash, 4.0);
+// Soft layered clouds over a gradient, cool at the top and warm at the horizon. Static, so it reads as painted.
+vec3 paintedSky(vec2 px, vec3 gameSky) {
+    float height = clamp(px.y / resolution.y, 0.0, 1.0);
+    vec3 sky = mix(LANDSCAPE_HAZE, vec3(0.55, 0.66, 0.72), smoothstep(0.35, 1.0, height));
+    // A little of the game's own sky color, so dark or tinted areas keep their mood
+    sky = mix(sky, gameSky, 0.2);
 
-    // Where the pigment sits. Surfaces use their scene position, mixing in height so walls vary too; the sky and
-    // HUD fall back to screen space.
+    vec2 p = px / resolution.y * vec2(2.2, 5.0);
+    float clouds = valueNoise(p * 1.3) * 0.55 + valueNoise(p * 3.1 + 7.0) * 0.3 + valueNoise(p * 7.4 + 3.0) * 0.15;
+    float body = smoothstep(0.45, 0.75, clouds);
+    // Clouds are lit from above and shaded below
+    float shade = smoothstep(0.55, 0.9, valueNoise(p * 1.3 + vec2(0.0, 0.35)));
+    vec3 cloud = mix(vec3(0.98, 0.95, 0.88), vec3(0.55, 0.58, 0.60), shade * 0.8);
+    return mix(sky, cloud, body * 0.85);
+}
+
+vec3 landscapePainting(vec2 px, vec2 screenPx) {
+    vec3 original = sampleColor(px);
+    float ui = uiCoverage(px);
     vec3 position;
-    vec2 paperPos = scenePosition(px, position) ?
-        vec2(position.x + position.y * 0.7, position.z - position.y * 0.7) / 160.0 :
-        px / 90.0;
+    bool surface = scenePosition(px, position);
+    if (!surface && ui < 0.5)
+        return softLight(paintedSky(px, original), mix(0.5, paperGrain(screenPx), canvasStrength));
 
-    // Each wash is laid down at its own strength, like separate passes of the brush
-    float passStrength = hash12(floor(wash * 7.0).rg * 13.0 + floor(wash.b * 7.0));
-    // Blotches within a wash: broad pooling and finer mottling, fixed to the surface
-    float blotches = valueNoise(paperPos) * 0.6 + valueNoise(paperPos * 3.3 + 17.0) * 0.4;
-    float density = 0.72 + 0.16 * passStrength + 0.24 * (blotches - 0.5);
+    float distance = surface ? viewDistance(px) : 0.0;
+    float far = smoothstep(LANDSCAPE_HAZE_START, LANDSCAPE_HAZE_END, distance);
 
-    // Watercolor dries darker at the rim of each wash: pigment pools where the washed tone changes
-    vec2 step = vec2(3.0, 0.0);
-    vec3 dx = flattenShades(sampleColor(washPx + step.xy), 4.0) - flattenShades(sampleColor(washPx - step.xy), 4.0);
-    vec3 dy = flattenShades(sampleColor(washPx + step.yx), 4.0) - flattenShades(sampleColor(washPx - step.yx), 4.0);
-    float rim = smoothstep(0.05, 0.3, length(dx) + length(dy));
-    density += 0.25 * rim;
+    // Detail up close, soft washes in the distance
+    vec2 bleed = wobbleOffset(px, 1.0 / 80.0) * mix(0.5, 2.0, far);
+    vec3 wash = kuwahara(px + bleed, max(paintRadius, 2));
+    vec3 color = mix(original, wash, mix(0.55, 1.0, far));
+    color = limitPaints(color);
+    if (hueSteps <= 0)
+        color = mix(color, wash, 0.5);
 
-    // Light washes stay mostly paper
-    density *= mix(1.0, 0.75, smoothstep(0.6, 0.95, luma(wash)));
-    // Pigment darkens as it thickens, beyond just covering the paper
-    vec3 pigment = wash * mix(1.0, 0.8, clamp(density - 0.8, 0.0, 1.0));
-    vec3 color = mix(vec3(1.0), pigment, clamp(density, 0.0, 1.0));
+    // Warm light, cool shadows, richer color
+    float light = luma(color);
+    color *= mix(LANDSCAPE_COOL, LANDSCAPE_WARM, smoothstep(0.15, 0.7, light));
+    color = adjustSaturation(color, 1.3);
+    // A gentle S-curve: deeper shadows, brighter light
+    color = mix(color, color * color * (3.0 - 2.0 * color), 0.35);
 
-    // A light pencil sketch underneath, following the real edges rather than the washes
-    float line = outline(px + wobbleOffset(px, 1.0 / 40.0) * 0.4, lineWidth);
-    color = mix(color, color * vec3(0.32, 0.30, 0.34), line * 0.5);
+    // Atmospheric perspective: distance loses contrast and dissolves into warm haze
+    vec3 haze = LANDSCAPE_HAZE * mix(0.92, 1.05, light);
+    color = mix(color, haze, far * 0.75);
 
-    // Cold-press paper: granulation where pigment settles into the grain, then the paper texture itself
-    float grain = paperGrain(screenPx);
-    color *= 1.0 - (0.5 - grain) * 0.2 * canvasStrength * density;
-    return softLight(clamp(color, 0.0, 1.0), mix(0.5, grain, canvasStrength));
+    // Forms come from light, not lines: only characters and big depth jumps get a faint warm brown line
+    float line = outlineWeighted(px + wobbleOffset(px, 1.0 / 40.0) * 0.3, lineWidth, 0.0, 0.4);
+    color = mix(color, color * vec3(0.35, 0.27, 0.2), line * 0.6 * (1.0 - far));
+
+    // Uneven wash density, pinned to surfaces so it moves with the scene
+    vec2 paperPos = surface ? vec2(position.x + position.y * 0.7, position.z - position.y * 0.7) / 200.0 : px / 90.0;
+    float mottle = valueNoise(paperPos) * 0.6 + valueNoise(paperPos * 3.3 + 17.0) * 0.4;
+    color *= 1.0 + (mottle - 0.5) * 0.1;
+
+    // The foreground frames the view, a little darker towards the edges of the frame
+    vec2 centered = px / resolution - 0.5;
+    color *= 1.0 - 0.22 * smoothstep(0.25, 0.75, dot(centered, centered) * 2.0);
+
+    return softLight(clamp(color, 0.0, 1.0), mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
 void main() {
@@ -543,8 +567,8 @@ void main() {
         color = oilPainting(px, screenPx);
     } else if (style == STYLE_ACRYLIC) {
         color = acrylicPainting(px, screenPx);
-    } else if (style == STYLE_WATERCOLOR) {
-        color = watercolor(px, screenPx);
+    } else if (style == STYLE_LANDSCAPE) {
+        color = landscapePainting(px, screenPx);
     } else {
         color = squiggleVision(px, screenPx);
     }
