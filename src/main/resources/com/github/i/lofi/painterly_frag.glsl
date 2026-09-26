@@ -478,16 +478,48 @@ const vec3 LANDSCAPE_COOL = vec3(0.80, 0.92, 1.02);
 const float LANDSCAPE_HAZE_START = 1200.0;
 const float LANDSCAPE_HAZE_END = 7000.0;
 
-// Soft layered clouds over a gradient, cool at the top and warm at the horizon. Static, so it reads as painted.
+// The direction a pixel looks in, in local scene space where -y is up. Returns false outside the 3D view.
+bool viewRay(vec2 px, out vec3 direction) {
+    direction = vec3(0.0, 0.0, 1.0);
+    if (!hasDepth)
+        return false;
+    vec2 uv = (px - sceneViewport.xy) / sceneViewport.zw;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+        return false;
+    // Any point along the pixel's ray will do. NDC depth 1 is a finite point in front of the camera for every
+    // projection core uses.
+    vec4 world = invProjectionMatrix * vec4(uv * 2.0 - 1.0, 1.0, 1.0);
+    if (abs(world.w) < 1e-6)
+        return false;
+    vec3 toPoint = world.xyz / world.w - cameraPos;
+    if (dot(toPoint, toPoint) < 1e-6)
+        return false;
+    direction = normalize(toPoint);
+    return true;
+}
+
+// Soft layered clouds over a gradient, cool overhead and warm at the horizon. The clouds are painted on a plane
+// high above the world, so they turn and tilt with the camera and shrink into the distance near the horizon.
 vec3 paintedSky(vec2 px, vec3 gameSky) {
-    float height = clamp(px.y / resolution.y, 0.0, 1.0);
-    vec3 sky = mix(LANDSCAPE_HAZE, vec3(0.55, 0.66, 0.72), smoothstep(0.35, 1.0, height));
+    vec3 direction;
+    float elevation;
+    vec2 p;
+    if (viewRay(px, direction)) {
+        elevation = -direction.y;
+        // Where the ray meets the cloud plane; rays near or below the horizon are held just above it
+        p = direction.xz / max(elevation, 0.06) * 0.9;
+    } else {
+        elevation = clamp(px.y / resolution.y, 0.0, 1.0) * 0.6;
+        p = px / resolution.y * vec2(2.2, 5.0);
+    }
+
+    vec3 sky = mix(LANDSCAPE_HAZE, vec3(0.55, 0.66, 0.72), smoothstep(0.0, 0.6, elevation));
     // A little of the game's own sky color, so dark or tinted areas keep their mood
     sky = mix(sky, gameSky, 0.2);
 
-    vec2 p = px / resolution.y * vec2(2.2, 5.0);
     float clouds = valueNoise(p * 1.3) * 0.55 + valueNoise(p * 3.1 + 7.0) * 0.3 + valueNoise(p * 7.4 + 3.0) * 0.15;
-    float body = smoothstep(0.45, 0.75, clouds);
+    // Clouds thin out into the haze at the horizon
+    float body = smoothstep(0.45, 0.75, clouds) * smoothstep(0.0, 0.12, elevation);
     // Clouds are lit from above and shaded below
     float shade = smoothstep(0.55, 0.9, valueNoise(p * 1.3 + vec2(0.0, 0.35)));
     vec3 cloud = mix(vec3(0.98, 0.95, 0.88), vec3(0.55, 0.58, 0.60), shade * 0.8);
