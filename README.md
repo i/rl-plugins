@@ -12,7 +12,7 @@ tones the style down on the interface if text gets hard to read.
 | Style | Look |
 |---|---|
 | Squiggle Vision | Wobbly, redrawn outlines over flat shaded fills (Home Movies) |
-| MS Paint | Chunky pixels and hard black outlines, in the classic 28-colour palette or, with **Colors** set, that many colours picked to fit the scene |
+| MS Paint | Chunky pixels that split along object edges, and hard black outlines at full resolution, in the classic 28-colour palette or, with **Colors** set, that many colours picked to fit the scene |
 | Oil painting | Kuwahara brush smoothing on a woven canvas |
 | Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
 | Landscape painting | After Thomas Moran: warm light and cool shadows, distance fading into warm haze, a painted sky, detail up close and soft washes far away, faint lines only on characters and big depth jumps |

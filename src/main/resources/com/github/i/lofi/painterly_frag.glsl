@@ -402,16 +402,36 @@ vec3 nearestAdaptiveColor(vec3 color) {
     return oklabToSrgb(best);
 }
 
-vec3 msPaint(vec2 px) {
-    // Chunky pixels: snap to a grid of pixelSize scene pixels
-    float pixelSize = float(max(paintRadius, 1));
-    vec2 cell = (floor(px / pixelSize) + 0.5) * pixelSize;
+// Samples per axis when picking a chunky cell's color
+const int MS_PAINT_CELL_SAMPLES = 3;
+// How far apart in depth two samples can be and still count as one surface, as a log distance ratio
+const float MS_PAINT_SAME_SURFACE = 0.04;
 
-    vec3 color = sampleColor(cell);
+vec3 msPaint(vec2 px) {
+    // Chunky pixels: a grid of pixelSize scene pixels. Each pixel takes the average color of the samples in its
+    // cell that lie on its own surface: the same character, at about the same depth. Cells straddling an edge
+    // split along the real silhouette, so fills stay chunky while shapes keep their definition.
+    float pixelSize = float(max(paintRadius, 1));
+    vec2 corner = floor(px / pixelSize) * pixelSize;
+    float ownId = objectId(px);
+    float ownDepth = log(viewDistance(px));
+
+    vec3 sum = vec3(0.0);
+    float count = 0.0;
+    for (int y = 0; y < MS_PAINT_CELL_SAMPLES; y++) {
+        for (int x = 0; x < MS_PAINT_CELL_SAMPLES; x++) {
+            vec2 at = corner + (vec2(x, y) + 0.5) / float(MS_PAINT_CELL_SAMPLES) * pixelSize;
+            if (objectId(at) != ownId || abs(log(viewDistance(at)) - ownDepth) > MS_PAINT_SAME_SURFACE)
+                continue;
+            sum += sampleColor(at);
+            count += 1.0;
+        }
+    }
+    vec3 color = count > 0.0 ? sum / count : sampleColor(px);
     vec3 fill = adaptiveColors > 0 ? nearestAdaptiveColor(color) : nearestPaletteColor(color);
 
-    // Hard, aliased black outlines with only a little wobble
-    float line = step(0.5, outline(cell + wobbleOffset(cell, 1.0 / 60.0) * 0.5, lineWidth));
+    // Hard, aliased black outlines at full resolution, like pencil over bucket fills, with only a little wobble
+    float line = step(0.5, outline(px + wobbleOffset(px, 1.0 / 60.0) * 0.5, lineWidth));
     return mix(fill, vec3(0), line);
 }
 
