@@ -16,14 +16,12 @@ tones the style down on the interface if text gets hard to read.
 | Oil painting | Kuwahara brush smoothing on a woven canvas |
 | Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
 | Landscape painting | After Thomas Moran: warm light and cool shadows, distance fading into warm haze, a painted sky, detail up close and soft washes far away, faint lines only on characters and big depth jumps |
-| Paper cutout | Each object is a piece of coloured paper glued on top of what's behind it, like Archer: each with its own paper, a small shadow onto the layer beneath, and a slight nudge out of place |
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
-to the screen in one full-screen pass that also reads the scene's depth for outlines. Every vertex
-also carries an object id in its spare short (`ObjectIds.java`): players and NPCs get 1-255, the
-ground 256, and each scenery object its own id above that. The scene shader writes it to a second,
-16-bit colour buffer. Outlines follow character ids, so characters stay separate from ground of the
-same colour, and Paper cutout cuts one piece per object.
+to the screen in one full-screen pass that also reads the scene's depth for outlines. Players and
+NPCs are also outlined by their shape: each gets an id from 1 to 255 in its vertices' spare short,
+the scene shader writes it to a second colour buffer, and the pass draws a line wherever it changes,
+so characters stay separate from ground of the same colour.
 
 MS Paint's adaptive palette is picked on the GPU with k-means clustering in OKLab: each frame is
 shrunk to 64x36 samples, and last frame's palette takes one clustering step towards them, so colours

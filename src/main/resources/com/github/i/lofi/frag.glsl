@@ -97,7 +97,7 @@ void main() {
 
   vec3 mixedColor = mix(c.rgb, fogColor.rgb, fFogAmount);
   FragColor = vec4(mixedColor, c.a);
-  ObjectId = vec4(float(fObjectId & 0x7fff) / 65535.0, 0.0, 0.0, c.a >= 0.5 ? 1.0 : 0.0);
+  ObjectId = vec4(float(fObjectId) / 255.0, 0.0, 0.0, c.a >= 0.5 ? 1.0 : 0.0);
 
 #ifdef FRAG_UVS
   if (fTextureId > 0) {

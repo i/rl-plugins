@@ -401,12 +401,8 @@ class SceneUploader
 		z.sizeO += faceCount;
 	}
 
-	// Written into static scenery vertices for the art style pass, see ObjectIds
-	private int objectId;
-
 	private void uploadZoneRenderable(Renderable r, Zone zone, int orient, int x, int y, int z, int lx, int lz, int ux, int uz, int id, GpuIntBuffer vb, GpuIntBuffer ab)
 	{
-		objectId = ObjectIds.scenery(x, z, id);
 		int pos = zone.vboA != null ? zone.vboA.vb.position() : 0;
 		Model model = null;
 		if (r instanceof Model)
@@ -422,7 +418,6 @@ class SceneUploader
 				uploadStaticModel(model, orient, x - basex, y, z - basez, vb, ab);
 			}
 		}
-		objectId = ObjectIds.NONE;
 		int endpos = zone.vboA != null ? zone.vboA.vb.position() : 0;
 		if (endpos > pos)
 		{
@@ -493,22 +488,22 @@ class SceneUploader
 		int tex = tile.getTexture() + 1;
 
 		vertexBuffer.put22224(lx2, ly2, lz2, hsl2);
-		vertexBuffer.put2222(tex, 256, 256, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 256, 256, 0);
 
 		vertexBuffer.put22224(lx3, ly3, lz3, hsl3);
-		vertexBuffer.put2222(tex, 0, 256, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 0, 256, 0);
 
 		vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-		vertexBuffer.put2222(tex, 256, 0, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 256, 0, 0);
 
 		vertexBuffer.put22224(lx0, ly0, lz0, hsl0);
-		vertexBuffer.put2222(tex, 0, 0, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 0, 0, 0);
 
 		vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-		vertexBuffer.put2222(tex, 256, 0, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 256, 0, 0);
 
 		vertexBuffer.put22224(lx3, ly3, lz3, hsl3);
-		vertexBuffer.put2222(tex, 0, 256, ObjectIds.GROUND);
+		vertexBuffer.put2222(tex, 0, 256, 0);
 
 		return 6;
 	}
@@ -564,13 +559,13 @@ class SceneUploader
 
 			int tex = triangleTextures != null ? triangleTextures[i] + 1 : 0;
 			vertexBuffer.put22224(lx0, ly0, lz0, hsl0);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex0] - lx) * 2f), (int) ((vertexZ[vertex0] - lz) * 2f), ObjectIds.GROUND);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex0] - lx) * 2f), (int) ((vertexZ[vertex0] - lz) * 2f), 0);
 
 			vertexBuffer.put22224(lx1, ly1, lz1, hsl1);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex1] - lx) * 2f), (int) ((vertexZ[vertex1] - lz) * 2f), ObjectIds.GROUND);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex1] - lx) * 2f), (int) ((vertexZ[vertex1] - lz) * 2f), 0);
 
 			vertexBuffer.put22224(lx2, ly2, lz2, hsl2);
-			vertexBuffer.put2222(tex, (int) ((vertexX[vertex2] - lx) * 2f), (int) ((vertexZ[vertex2] - lz) * 2f), ObjectIds.GROUND);
+			vertexBuffer.put2222(tex, (int) ((vertexX[vertex2] - lx) * 2f), (int) ((vertexZ[vertex2] - lz) * 2f), 0);
 		}
 
 		return cnt;
@@ -681,13 +676,13 @@ class SceneUploader
 			GpuIntBuffer buf = alpha ? ab : vb;
 
 			buf.put22224(vx1, vy1, vz1, alphaBias | color1);
-			buf.put2222(texture, su0, sv0, objectId);
+			buf.put2222(texture, su0, sv0, 0);
 
 			buf.put22224(vx2, vy2, vz2, alphaBias | color2);
-			buf.put2222(texture, su1, sv1, objectId);
+			buf.put2222(texture, su1, sv1, 0);
 
 			buf.put22224(vx3, vy3, vz3, alphaBias | color3);
-			buf.put2222(texture, su2, sv2, objectId);
+			buf.put2222(texture, su2, sv2, 0);
 
 			len += 3;
 		}

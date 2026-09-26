@@ -9,7 +9,6 @@
 #define STYLE_OIL 3
 #define STYLE_ACRYLIC 4
 #define STYLE_LANDSCAPE 5
-#define STYLE_PAPER_CUTOUT 6
 
 // Debug view ids must match rs117.hd.config.PainterlyDebugView.
 #define DEBUG_SCENE 1
@@ -38,7 +37,7 @@ vec3 hsvToSrgb(vec3 c) {
 
 uniform sampler2D sceneColor;  // the full frame, UI coverage in alpha
 uniform sampler2D sceneDepth;  // scene depth, covering only sceneViewport
-uniform sampler2D objectIds;   // scene object ids / 65535, covering only sceneViewport, see ObjectIds.java
+uniform sampler2D objectIds;   // scene object ids / 255, covering only sceneViewport: players and NPCs 1-255, else 0
 uniform vec2 resolution;       // frame size in pixels
 uniform vec4 sceneViewport;    // x, y, width, height of the 3D scene within the frame
 uniform bool hasDepth;
@@ -161,24 +160,14 @@ bool scenePosition(vec2 px, out vec3 position) {
     return true;
 }
 
-#define OBJECT_MAX_CHARACTER 255.0
-#define OBJECT_GROUND 256.0
-
-// The object id under a pixel, see ObjectIds.java: 0 for sky, 1-255 players and NPCs, 256 the ground,
-// and above that one id per scenery object.
+// The object id under a pixel, 0-255: players and NPCs have their own, everything else is 0.
 float objectId(vec2 px) {
     if (!hasDepth)
         return 0.0;
     vec2 uv = (px - sceneViewport.xy) / sceneViewport.zw;
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
         return 0.0;
-    return floor(texture(objectIds, uv).r * 65535.0 + 0.5);
-}
-
-// The character id under a pixel, 1-255, or 0 for anything that isn't a player or NPC
-float characterId(vec2 px) {
-    float id = objectId(px);
-    return id <= OBJECT_MAX_CHARACTER ? id : 0.0;
+    return floor(texture(objectIds, uv).r * 255.0 + 0.5);
 }
 
 // Distance from the camera in game units, where one tile is 128 units.
@@ -227,7 +216,7 @@ float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight
     float centerLuma = luma(centerColor);
     // The HUD has no depth of its own, so it only gets color lines, at full strength regardless of distance
     float centerUi = center.a;
-    float centerId = characterId(px);
+    float centerId = objectId(px);
     float edge = 0.0;
 
     for (int i = 0; i < 8; i++) {
@@ -245,7 +234,7 @@ float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight
 
         // Players and NPCs are outlined by their shape even where their colors and depth match what's behind
         // them. Only the higher id draws, so lines between two characters stay one line thick.
-        float objectEdge = centerId > characterId(neighbor) ? 1.0 - ui : 0.0;
+        float objectEdge = centerId > objectId(neighbor) ? 1.0 - ui : 0.0;
 
         float nearest = min(centerDistance, neighborDistance);
         float fade = mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui);
@@ -582,91 +571,6 @@ vec3 landscapePainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(color, 0.0, 1.0), mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
-// Paper cutout, like Archer's ransom-note look: every object is a piece of colored paper glued on top of what's
-// behind it. Pieces come from the object id buffer, so they follow real shapes: each character, tree or wall is
-// one piece and the ground is one sheet. Each piece has its own paper, is nudged slightly out of place, shows a
-// hairline white cut edge, and casts a small shadow onto the piece below.
-const float CUTOUT_SHADOW_PIXELS = 3.0;
-const float CUTOUT_JITTER_PIXELS = 1.0;
-const vec3 CUTOUT_EDGE_COLOR = vec3(0.97, 0.95, 0.9);
-
-// Stacking layers: sky at the back, then the ground, scenery, and characters on top
-float cutoutLayer(float id) {
-    if (id <= 0.0)
-        return 0.0;
-    if (id == OBJECT_GROUND)
-        return 1.0;
-    return id > OBJECT_GROUND ? 2.0 : 3.0;
-}
-
-// Whether piece a (id, distance) visibly lies on top of piece b: a higher layer, or clearly nearer within a layer.
-// Touching pieces at about the same depth, like neighboring wall segments, count as one sheet and aren't cut.
-bool onTop(vec2 a, vec2 b) {
-    float la = cutoutLayer(a.x);
-    float lb = cutoutLayer(b.x);
-    if (la != lb)
-        return la > lb;
-    return b.y - a.y > max(a.y * 0.08, 64.0);
-}
-
-vec2 cutoutPiece(vec2 px) {
-    return vec2(objectId(px), viewDistance(px));
-}
-
-vec3 paperCutout(vec2 px, vec2 screenPx) {
-    // The HUD keeps its shapes, on plain paper
-    if (uiCoverage(px) > 0.5)
-        return softLight(sampleColor(px), mix(0.5, paperGrain(screenPx), canvasStrength));
-
-    // Nudge each piece a little out of place, so cuts don't line up like a clean render
-    float firstId = objectId(px);
-    float seed = hash12(vec2(firstId * 0.37, 11.0));
-    vec2 jitter = (vec2(seed, hash12(vec2(seed, 3.7))) - 0.5) * 2.0 * CUTOUT_JITTER_PIXELS;
-    vec2 at = px + jitter;
-    vec2 piece = cutoutPiece(at);
-    float ownSeed = hash12(vec2(piece.x * 0.37, 11.0));
-
-    // Flat paper color with a few shading bands, so faces and clothes stay readable inside a piece
-    vec3 color = kuwahara(at, max(paintRadius, 2));
-    color = flattenShades(adjustSaturation(color, 1.15), 4.0);
-
-    // Each piece is cut from its own sheet: a slight tint, and fibers running at the piece's own angle
-    float angle = ownSeed * 6.2831853;
-    vec2 along = vec2(cos(angle), sin(angle));
-    float fibers = valueNoise(vec2(dot(screenPx, along) * 0.06, dot(screenPx, vec2(-along.y, along.x)) * 0.6));
-    float flecks = hash12(floor(screenPx / 2.0) + ownSeed * 71.0);
-    color *= 1.0 + (ownSeed - 0.5) * 0.1;
-    color *= 1.0 + ((fibers - 0.5) * 0.12 + (flecks - 0.5) * 0.06) * mix(0.4, 1.0, canvasStrength);
-
-    // A hairline white cut edge where this piece lies on top of a different one
-    float edge = 0.0;
-    for (int i = 0; i < 4; i++) {
-        vec2 offset = vec2(i == 0 ? 1.0 : i == 1 ? -1.0 : 0.0, i == 2 ? 1.0 : i == 3 ? -1.0 : 0.0);
-        vec2 neighbor = cutoutPiece(at + offset);
-        if (neighbor.x != piece.x && onTop(piece, neighbor))
-            edge = 1.0;
-    }
-    // Only characters show a white cut edge, and only up close. White rims around every shape read as a selection
-    // highlight, so everything else is separated by its shadow and paper alone.
-    float nearFade = 1.0 - smoothstep(LINE_FADE_START * 0.5, LINE_FADE_START * 1.5, piece.y);
-    float edgeStrength = cutoutLayer(piece.x) == 3.0 ? 0.5 * nearFade : 0.0;
-    color = mix(color, CUTOUT_EDGE_COLOR, edge * edgeStrength);
-
-    // A small soft shadow cast down and to the right by any piece lying on this one
-    float shadow = 0.0;
-    for (int i = 1; i <= 2; i++) {
-        float reach = CUTOUT_SHADOW_PIXELS * float(i) / 2.0;
-        vec2 caster = cutoutPiece(at + vec2(-reach, reach));
-        if (caster.x != piece.x && onTop(caster, piece))
-            shadow = max(shadow, 1.0 - float(i - 1) * 0.45);
-    }
-    // Shadows shrink away with distance too, so a zoomed-out view doesn't turn into a web of dark lines
-    float shadowFade = 1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, piece.y);
-    color *= 1.0 - 0.32 * shadow * shadowFade * (1.0 - edge * edgeStrength);
-
-    return clamp(color, 0.0, 1.0);
-}
-
 void main() {
     vec2 px = fUv * resolution;
     vec2 screenPx = gl_FragCoord.xy;
@@ -697,8 +601,6 @@ void main() {
         color = acrylicPainting(px, screenPx);
     } else if (style == STYLE_LANDSCAPE) {
         color = landscapePainting(px, screenPx);
-    } else if (style == STYLE_PAPER_CUTOUT) {
-        color = paperCutout(px, screenPx);
     } else {
         color = squiggleVision(px, screenPx);
     }
