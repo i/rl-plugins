@@ -23,7 +23,7 @@ import net.runelite.client.ui.overlay.OverlayPriority;
 
 /**
  * Draws hitsplats as blocky tiles to match {@link HealthBarOverlay}. The API can't hide the game's own hitsplats,
- * so each tile is drawn over the slot the game uses, big enough to cover its splat. Everything runs on the client
+ * so each tile is drawn over the slot the game uses, big enough to cover its splat, in a layer drawn after them. Everything runs on the client
  * thread.
  */
 @Singleton
@@ -52,7 +52,8 @@ class HitsplatOverlay extends Overlay
 		this.client = client;
 		this.config = config;
 		setPosition(OverlayPosition.DYNAMIC);
-		setLayer(OverlayLayer.ABOVE_SCENE);
+		// The game draws hitsplats after the ABOVE_SCENE overlays, so tiles go in the next layer to cover them
+		setLayer(OverlayLayer.UNDER_WIDGETS);
 		setPriority(OverlayPriority.HIGH);
 	}
 
