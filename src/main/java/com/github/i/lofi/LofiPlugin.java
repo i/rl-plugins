@@ -61,6 +61,7 @@ import net.runelite.api.WorldEntity;
 import net.runelite.api.WorldView;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.OverheadTextChanged;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -77,6 +78,7 @@ import com.github.i.lofi.config.AntiAliasingMode;
 import com.github.i.lofi.config.UIScalingMode;
 import com.github.i.lofi.template.Template;
 import net.runelite.client.ui.ClientUI;
+import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.ui.DrawManager;
 import net.runelite.rlawt.AWTContext;
 import org.lwjgl.opengl.GL;
@@ -292,9 +294,16 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	static final float[] IDENTITY = Mat4.identity();
 	private static final float[] NO_OBJECT_ID = new float[4];
 
+	@Inject
+	private OverlayManager overlayManager;
+
+	@Inject
+	private ChatBubbleOverlay chatBubbleOverlay;
+
 	@Override
 	protected void startUp()
 	{
+		overlayManager.add(chatBubbleOverlay);
 		// Audio doesn't depend on the renderer, so it runs even if the GPU side fails to start
 		lofiAudio.startUp();
 		spriteManager.startUp();
@@ -462,6 +471,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Override
 	protected void shutDown()
 	{
+		overlayManager.remove(chatBubbleOverlay);
+		chatBubbleOverlay.clear();
 		lofiAudio.shutDown();
 		spriteManager.shutDown();
 		clientThread.invoke(() ->
@@ -1437,6 +1448,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		{
 			z.invalidate = true;
 			log.debug("Zone invalidated: wx={} x={} z={}", scene.getWorldViewId(), zx, zz);
+		}
+	}
+
+	@Subscribe
+	public void onOverheadTextChanged(OverheadTextChanged event)
+	{
+		if (config.chatBubbles())
+		{
+			chatBubbleOverlay.show(event.getActor(), event.getOverheadText());
 		}
 	}
 

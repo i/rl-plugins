@@ -31,6 +31,14 @@ Code: `PainterlyPass.java` (the pass) and `painterly_frag.glsl` (the styles). It
 is a few dozen texture reads; Kuwahara reads land between pixel pairs, so each averages a 2x2
 block.
 
+## Chat bubbles
+
+**Chat bubbles** (on by default, in the Art style section) draws overhead text, like public chat
+and NPC shouts, as comic book speech bubbles with a tail pointing at the speaker. The game's own
+overhead text is hidden by zeroing its display timer, so the chat effects (wave, scroll, colours)
+are not shown. Bubbles are part of the UI, so **HUD strength** decides how much the art style
+paints them. Code: `ChatBubbleOverlay.java`.
+
 ## Sprites
 
 The **Sprites** section draws players and NPCs as flat cut-outs, like RuneScape Classic or Paper

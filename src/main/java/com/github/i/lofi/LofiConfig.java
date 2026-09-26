@@ -174,6 +174,18 @@ public interface LofiConfig extends Config
 		return PainterlyDebugView.OFF;
 	}
 
+	@ConfigItem(
+		keyName = "chatBubbles",
+		name = "Chat bubbles",
+		description = "Show overhead text, like public chat and NPC shouts, in comic book speech bubbles.",
+		position = 9,
+		section = painterlySettings
+	)
+	default boolean chatBubbles()
+	{
+		return true;
+	}
+
 	/*====== Sprites ======*/
 
 	@ConfigSection(
