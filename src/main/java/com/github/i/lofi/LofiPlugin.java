@@ -62,6 +62,7 @@ import net.runelite.api.WorldView;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.OverheadTextChanged;
+import net.runelite.api.events.PostHealthBarConfig;
 import net.runelite.api.events.PostClientTick;
 import net.runelite.api.hooks.DrawCallbacks;
 import net.runelite.client.callback.ClientThread;
@@ -300,10 +301,16 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	@Inject
 	private ChatBubbleOverlay chatBubbleOverlay;
 
+	@Inject
+	private HealthBarOverlay healthBarOverlay;
+
 	@Override
 	protected void startUp()
 	{
 		overlayManager.add(chatBubbleOverlay);
+		overlayManager.add(healthBarOverlay);
+		// Reload the game's bars, so ones already loaded get hidden too
+		clientThread.invoke(client::resetHealthBarCaches);
 		// Audio doesn't depend on the renderer, so it runs even if the GPU side fails to start
 		lofiAudio.startUp();
 		spriteManager.startUp();
@@ -472,6 +479,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	protected void shutDown()
 	{
 		overlayManager.remove(chatBubbleOverlay);
+		overlayManager.remove(healthBarOverlay);
+		// Reload the game's bars unblanked
+		clientThread.invoke(client::resetHealthBarCaches);
 		chatBubbleOverlay.clear();
 		lofiAudio.shutDown();
 		spriteManager.shutDown();
@@ -529,7 +539,12 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	{
 		if (configChanged.getGroup().equals(LofiConfig.GROUP))
 		{
-			if (configChanged.getKey().equals("unlockFps")
+			if (configChanged.getKey().equals("blockyHealthBars"))
+			{
+				// Reload the game's bars, blanked or not to match
+				clientThread.invoke(client::resetHealthBarCaches);
+			}
+			else if (configChanged.getKey().equals("unlockFps")
 				|| configChanged.getKey().equals("vsyncMode")
 				|| configChanged.getKey().equals("fpsTarget"))
 			{
@@ -1457,6 +1472,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		if (config.chatBubbles())
 		{
 			chatBubbleOverlay.show(event.getActor(), event.getOverheadText());
+		}
+	}
+
+	@Subscribe
+	public void onPostHealthBarConfig(PostHealthBarConfig event)
+	{
+		if (config.blockyHealthBars())
+		{
+			HealthBarOverlay.hideGameBar(event.getHealthBarConfig());
 		}
 	}
 

@@ -119,10 +119,16 @@ class ChatBubbleOverlay extends Overlay
 				continue;
 			}
 
-			Point anchor = actor.getCanvasTextLocation(g, "", actor.getLogicalHeight() + HEAD_CLEARANCE);
+			// Above the health bar while one is showing, so the tail doesn't cover it
+			int clearance = actor.getHealthRatio() >= 0 ? HealthBarOverlay.HEAD_CLEARANCE : 0;
+			Point anchor = actor.getCanvasTextLocation(g, "", actor.getLogicalHeight() + HEAD_CLEARANCE + clearance);
 			if (anchor == null)
 			{
 				continue;
+			}
+			if (clearance > 0)
+			{
+				anchor = new Point(anchor.getX(), anchor.getY() - HealthBarOverlay.HEIGHT - 2);
 			}
 
 			float alpha = Math.min(1f, (SHOW_MILLIS - age) / (float) FADE_MILLIS);

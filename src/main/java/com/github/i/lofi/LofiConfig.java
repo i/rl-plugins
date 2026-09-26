@@ -186,6 +186,18 @@ public interface LofiConfig extends Config
 		return true;
 	}
 
+	@ConfigItem(
+		keyName = "blockyHealthBars",
+		name = "Blocky health bars",
+		description = "Draw taller health bars as green blocks over red, wider for things with more hitpoints.",
+		position = 10,
+		section = painterlySettings
+	)
+	default boolean blockyHealthBars()
+	{
+		return true;
+	}
+
 	/*====== Sprites ======*/
 
 	@ConfigSection(

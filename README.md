@@ -39,6 +39,16 @@ overhead text is replaced with a blank, like RuneLite's chat filter does, so the
 are not shown. Bubbles are part of the UI, so **HUD strength** decides how much the art style
 paints them. Code: `ChatBubbleOverlay.java`.
 
+## Blocky health bars
+
+**Blocky health bars** (on by default, in the Art style section) replaces the game's health bars
+with taller ones: a row of green blocks for the health left, then solid red for what's missing.
+Bars are wider for things with more total hitpoints, growing with its square root from 24 to 160
+pixels, with one block per hitpoint when they fit. NPC hitpoints come from RuneLite's NPC data and
+yours from your Hitpoints level; other players don't share theirs, so they get a 50 hp bar. The
+game's bars are hidden by blanking their sprites as the client loads them. Code:
+`HealthBarOverlay.java`.
+
 ## Sprites
 
 The **Sprites** section draws players and NPCs as flat cut-outs, like RuneScape Classic or Paper
