@@ -59,6 +59,7 @@ import net.runelite.api.TextureProvider;
 import net.runelite.api.TileObject;
 import net.runelite.api.WorldEntity;
 import net.runelite.api.WorldView;
+import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.CommandExecuted;
 import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.OverheadTextChanged;
@@ -1458,6 +1459,12 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		{
 			chatBubbleOverlay.show(event.getActor(), event.getOverheadText());
 		}
+	}
+
+	@Subscribe
+	public void onBeforeRender(BeforeRender event)
+	{
+		chatBubbleOverlay.hideGameText();
 	}
 
 	@Subscribe

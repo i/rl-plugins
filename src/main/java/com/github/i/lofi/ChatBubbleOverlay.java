@@ -29,7 +29,7 @@ import net.runelite.client.util.Text;
 
 /**
  * Draws overhead text, like public chat and NPC shouts, as comic book speech bubbles. The game's own overhead
- * text is hidden by zeroing its display timer, see {@link #show}. Everything runs on the client thread.
+ * text is hidden by zeroing its display timer, see {@link #hideGameText}. Everything runs on the client thread.
  */
 @Singleton
 class ChatBubbleOverlay extends Overlay
@@ -83,6 +83,21 @@ class ChatBubbleOverlay extends Overlay
 		}
 		bubbles.put(actor, new Bubble(text, System.currentTimeMillis()));
 		actor.setOverheadCycle(0);
+	}
+
+	/**
+	 * Zeroes the game's overhead text timer for every actor with a bubble. Call before each frame is drawn: for
+	 * some messages, like the local player's own chat, the game starts the timer after announcing the text.
+	 */
+	void hideGameText()
+	{
+		for (Actor actor : bubbles.keySet())
+		{
+			if (actor != null && actor.getOverheadCycle() > 0)
+			{
+				actor.setOverheadCycle(0);
+			}
+		}
 	}
 
 	void clear()
