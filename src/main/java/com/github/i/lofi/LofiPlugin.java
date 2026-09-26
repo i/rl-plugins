@@ -128,6 +128,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private PainterlyPass painterlyPass;
 
 	@Inject
+	private SpriteManager spriteManager;
+
+	@Inject
 	private TextureManager textureManager;
 
 	@Inject
@@ -290,6 +293,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	{
 		// Audio doesn't depend on the renderer, so it runs even if the GPU side fails to start
 		lofiAudio.startUp();
+		spriteManager.startUp();
 		root = new SceneContext(NUM_ZONES, NUM_ZONES);
 		subs = new SceneContext[MAX_WORLDVIEWS];
 		int numThreads = config.numThreads();
@@ -455,6 +459,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	protected void shutDown()
 	{
 		lofiAudio.shutDown();
+		spriteManager.shutDown();
 		clientThread.invoke(() ->
 		{
 			client.setGpuFlags(0);
@@ -1028,6 +1033,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		int[] viewport = new int[4];
 		glGetIntegerv(GL_VIEWPORT, viewport);
 		painterlyPass.setSceneCamera(viewport, projectionMatrix, cameraX, cameraY, cameraZ);
+		spriteManager.beginFrame(cameraPitch, cameraYaw);
 
 		glUniformMatrix4fv(uniEntityProj, false, IDENTITY);
 
@@ -1315,7 +1321,25 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		}
 
 		Renderable renderable = gameObject.getRenderable();
-		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE;
+
+		// Players and NPCs drawn as flat sprites use their snapped facing, see SpriteManager. Sprites also draw every
+		// face a second time, reversed, so they need twice the room.
+		SpriteManager.SpriteView spriteView = scene.getWorldViewId() == WorldView.TOPLEVEL ? spriteManager.getView() : null;
+		SpriteManager.ActorSprite sprite = spriteView != null ? spriteManager.get(renderable) : null;
+		if (sprite == null)
+		{
+			spriteView = null;
+		}
+		else
+		{
+			orient = sprite.orientation;
+			if (spriteManager.isRoundShadowsEnabled())
+			{
+				spriteManager.addShadow(x, y, z, sprite.shadowRadius);
+			}
+		}
+
+		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE * (spriteView != null ? 2 : 1);
 		int renderMode = renderable.getRenderMode();
 		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0)
 		{
@@ -1328,11 +1352,16 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			m.calculateBoundsCylinder();
 			try
 			{
+				uploader.setSprite(spriteView, sprite != null ? sprite.width : 1);
 				uploader.uploadSortedModel(rt, worldProjection, m, orient, x, y, z, o.vbo.vb, a.vbo.vb, renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH);
 			}
 			catch (Exception ex)
 			{
 				log.debug("error drawing entity", ex);
+			}
+			finally
+			{
+				uploader.setSprite(null, 1);
 			}
 			int end = a.vbo.vb.position();
 
@@ -1353,7 +1382,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			RenderThread rt = rts[0];
 			VAO o = rt.vaoO.get(size);
 			ModelUploader uploader = rt.modelUploader;
-			uploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
+			uploader.setSprite(spriteView, sprite != null ? sprite.width : 1);
+			try
+			{
+				uploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
+			}
+			finally
+			{
+				uploader.setSprite(null, 1);
+			}
 			o.addRange(ctx.projection, scene, 0);
 		}
 	}

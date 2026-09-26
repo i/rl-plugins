@@ -27,6 +27,8 @@ package com.github.i.lofi;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import com.github.i.lofi.config.SpriteMode;
+import net.runelite.client.config.Keybind;
 import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 import net.runelite.client.config.Units;
@@ -170,6 +172,104 @@ public interface LofiConfig extends Config
 	default PainterlyDebugView painterlyDebugView()
 	{
 		return PainterlyDebugView.OFF;
+	}
+
+	/*====== Sprites ======*/
+
+	@ConfigSection(
+		name = "Sprites",
+		description = "Draw players and NPCs as flat, paper-like sprites that turn in fixed steps.",
+		position = 50
+	)
+	String spriteSettings = "spriteSettings";
+
+	@ConfigItem(
+		keyName = "spriteMode",
+		name = "Sprite mode",
+		description = "8 directions works like RuneScape Classic. 2 directions only shows the left and right sides, " +
+			"and flips over like paper when turning.",
+		position = 0,
+		section = spriteSettings
+	)
+	default SpriteMode spriteMode()
+	{
+		return SpriteMode.OFF;
+	}
+
+	@ConfigItem(
+		keyName = "spriteToggleKey",
+		name = "Toggle hotkey",
+		description = "Switches sprites on and off without changing the mode, for example during boss fights.",
+		position = 1,
+		section = spriteSettings
+	)
+	default Keybind spriteToggleKey()
+	{
+		return Keybind.NOT_SET;
+	}
+
+	@ConfigItem(
+		keyName = "spritePinAngle",
+		name = "Pin viewing angle",
+		description = "Draw every sprite as if seen from the same height, however far the camera is tilted. " +
+			"Click areas follow the real 3D model, so they drift further from the sprite the more the camera tilt differs.",
+		position = 2,
+		section = spriteSettings
+	)
+	default boolean spritePinAngle()
+	{
+		return true;
+	}
+
+	@Units("°")
+	@Range(min = 0, max = 80)
+	@ConfigItem(
+		keyName = "spriteElevation",
+		name = "Viewing angle",
+		description = "How far above the horizon sprites are seen from when the viewing angle is pinned. 0 is side-on.",
+		position = 3,
+		section = spriteSettings
+	)
+	default int spriteElevation()
+	{
+		return 20;
+	}
+
+	@Range(min = 1, max = 5)
+	@ConfigItem(
+		keyName = "spriteMaxSize",
+		name = "Max size",
+		description = "NPCs larger than this many tiles across stay 3D, since huge flat cards cut through walls.",
+		position = 4,
+		section = spriteSettings
+	)
+	default int spriteMaxSize()
+	{
+		return 2;
+	}
+
+	@ConfigItem(
+		keyName = "spriteSkipList",
+		name = "Keep 3D",
+		description = "Comma-separated NPC names or IDs that always stay 3D, e.g. \"Vorkath, 8615\".",
+		position = 5,
+		section = spriteSettings
+	)
+	default String spriteSkipList()
+	{
+		return "";
+	}
+
+	@ConfigItem(
+		keyName = "spriteRoundShadows",
+		name = "Round shadows",
+		description = "A soft round shadow under each sprite, instead of the shadow of a flat card.",
+		position = 6,
+		section = spriteSettings
+	)
+	default boolean spriteRoundShadows()
+	{
+		return true;
 	}
 
 	/*====== Lo-fi audio ======*/

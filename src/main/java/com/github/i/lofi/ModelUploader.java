@@ -26,6 +26,7 @@ package com.github.i.lofi;
 
 import java.nio.IntBuffer;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import net.runelite.api.Model;
 import net.runelite.api.Perspective;
 import net.runelite.api.Projection;
@@ -83,6 +84,31 @@ class ModelUploader
 		v = new float[3];
 	}
 
+	// Flattened faces that turned to face away are reversed instead of culled, and pushed this far behind the card
+	// along the view, in local units (a tile is 128), so the faces in front of them always win the depth test
+	private static final float SPRITE_FLIPPED_FACE_PUSH = 3;
+
+	// Set while uploading a player or NPC drawn as a sprite, see SpriteManager
+	@Nullable
+	private SpriteManager.SpriteView sprite;
+	private float spriteWidth;
+	private final float[] spriteVertex = new float[3];
+
+	/**
+	 * Flattens the following uploads into a sprite card, or stops flattening when {@code view} is null.
+	 */
+	void setSprite(@Nullable SpriteManager.SpriteView view, float width)
+	{
+		sprite = view;
+		spriteWidth = width;
+	}
+
+	/** Flattens a vertex offset from the model's base into spriteVertex. */
+	private void flattenVertex(float x, float y, float z)
+	{
+		sprite.flatten(x, y, z, spriteWidth, spriteVertex);
+	}
+
 	int uploadSortedModel(LofiPlugin.RenderThread rt, Projection proj, Model model, int orientation, int x, int y, int z, IntBuffer opaqueBuffer, IntBuffer alphaBuffer, boolean prioritySort)
 	{
 		final int vertexCount = model.getVerticesCount();
@@ -130,6 +156,14 @@ class ModelUploader
 				vertexZ = vertexZ * orientCosine - x0 * orientSine;
 			}
 
+			if (sprite != null)
+			{
+				flattenVertex(vertexX, vertexY, vertexZ);
+				vertexX = spriteVertex[0];
+				vertexY = spriteVertex[1];
+				vertexZ = spriteVertex[2];
+			}
+
 			// move to local position
 			vertexX += x;
 			vertexY += y;
@@ -166,8 +200,8 @@ class ModelUploader
 			if (faceColors3[faceIdx] != -2)
 			{
 				final int v1 = indices1[faceIdx];
-				final int v2 = indices2[faceIdx];
-				final int v3 = indices3[faceIdx];
+				int v2 = indices2[faceIdx];
+				int v3 = indices3[faceIdx];
 
 				final float
 					aX = modelProjectedX[v1],
@@ -177,7 +211,17 @@ class ModelUploader
 					cX = modelProjectedX[v3],
 					cY = modelProjectedY[v3];
 
-				if ((aX - bX) * (cY - bY) - (cX - bX) * (aY - bY) > 0)
+				boolean facing = (aX - bX) * (cY - bY) - (cX - bX) * (aY - bY) > 0;
+				// Reversing the second and third vertex flips a face's winding, so a sprite face that turned away
+				// when flattened is drawn from behind rather than leaving a hole
+				boolean flipped = !facing && sprite != null;
+				if (flipped)
+				{
+					int swap = v2;
+					v2 = v3;
+					v3 = swap;
+				}
+				if (facing || flipped)
 				{
 					int distance = radius + (distances[v1] + distances[v2] + distances[v3]) / 3;
 					assert distance >= 0 && distance < diameter;
@@ -203,11 +247,11 @@ class ModelUploader
 					int su0 = (int) (u[0] * 256f);
 					int sv0 = (int) (v[0] * 256f);
 
-					int su1 = (int) (u[1] * 256f);
-					int sv1 = (int) (v[1] * 256f);
+					int su1 = (int) (u[flipped ? 2 : 1] * 256f);
+					int sv1 = (int) (v[flipped ? 2 : 1] * 256f);
 
-					int su2 = (int) (u[2] * 256f);
-					int sv2 = (int) (v[2] * 256f);
+					int su2 = (int) (u[flipped ? 1 : 2] * 256f);
+					int sv2 = (int) (v[flipped ? 1 : 2] * 256f);
 
 					int color1 = faceColors1[faceIdx];
 					int color2 = faceColors2[faceIdx];
@@ -216,6 +260,12 @@ class ModelUploader
 					if (color3 == -1)
 					{
 						color2 = color3 = color1;
+					}
+					else if (flipped)
+					{
+						int swap = color2;
+						color2 = color3;
+						color3 = swap;
 					}
 
 					// HSL override is not applied to textured faces
@@ -231,27 +281,32 @@ class ModelUploader
 
 					int alphaBias = 0;
 					alphaBias |= faceTransparency(modelTransparency, transparencies != null ? transparencies[faceIdx] & 0xff : 0) << 24;
-					alphaBias |= bias != null ? (bias[faceIdx] & 0xff) << 16 : 0;
+					// A flattened sprite keeps only a few units of depth, far less than the bias moves a face
+					alphaBias |= bias != null && sprite == null ? (bias[faceIdx] & 0xff) << 16 : 0;
 					int texture = faceTextures != null ? faceTextures[faceIdx] + 1 : 0;
 
+					float pushX = flipped ? sprite.dPx * SPRITE_FLIPPED_FACE_PUSH : 0;
+					float pushY = flipped ? sprite.dPy * SPRITE_FLIPPED_FACE_PUSH : 0;
+					float pushZ = flipped ? sprite.dPz * SPRITE_FLIPPED_FACE_PUSH : 0;
+
 					int vbOff = faceIdx * FACE_SIZE;
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v1]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v1]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v1]);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v1] + pushX);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v1] + pushY);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v1] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color1;
 					vertexBuffer[vbOff++] = ((su0 & 0xffff) << 16 | (texture & 0xffff));
 					vertexBuffer[vbOff++] = sv0 & 0xffff;
 
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v2]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v2]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v2]);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v2] + pushX);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v2] + pushY);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v2] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color2;
 					vertexBuffer[vbOff++] = ((su1 & 0xffff) << 16 | (texture & 0xffff));
 					vertexBuffer[vbOff++] = sv1 & 0xffff;
 
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v3]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v3]);
-					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v3]);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v3] + pushX);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v3] + pushY);
+					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v3] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color3;
 					vertexBuffer[vbOff++] = ((su2 & 0xffff) << 16 | (texture & 0xffff));
 					vertexBuffer[vbOff++] = sv2 & 0xffff;
@@ -524,6 +579,14 @@ class ModelUploader
 				vertexZ = vertexZ * orientCosine - x0 * orientSine;
 			}
 
+			if (sprite != null)
+			{
+				flattenVertex(vertexX, vertexY, vertexZ);
+				vertexX = spriteVertex[0];
+				vertexY = spriteVertex[1];
+				vertexZ = spriteVertex[2];
+			}
+
 			vertexX += x;
 			vertexY += y;
 			vertexZ += z;
@@ -589,7 +652,8 @@ class ModelUploader
 
 			int alphaBias = 0;
 			alphaBias |= transparencies != null ? (transparencies[face] & 0xff) << 24 : 0;
-			alphaBias |= bias != null ? (bias[face] & 0xff) << 16 : 0;
+			// A flattened sprite keeps only a few units of depth, far less than the bias moves a face
+			alphaBias |= bias != null && sprite == null ? (bias[face] & 0xff) << 16 : 0;
 			int texture = faceTextures != null ? faceTextures[face] + 1 : 0;
 
 			putfff4(buffer, vx1, vy1, vz1, alphaBias | color1);
@@ -602,6 +666,27 @@ class ModelUploader
 			put2222(buffer, texture, su2, sv2, 0);
 
 			len += 3;
+
+			if (sprite != null)
+			{
+				// Flattening turns some faces away from the camera, and back-face culling would leave holes. Each
+				// face is also drawn reversed, pushed behind the card: culled where the face still points at the
+				// camera, and otherwise filling the hole without covering anything in front of it.
+				float pushX = sprite.dPx * SPRITE_FLIPPED_FACE_PUSH;
+				float pushY = sprite.dPy * SPRITE_FLIPPED_FACE_PUSH;
+				float pushZ = sprite.dPz * SPRITE_FLIPPED_FACE_PUSH;
+
+				putfff4(buffer, vx1 + pushX, vy1 + pushY, vz1 + pushZ, alphaBias | color1);
+				put2222(buffer, texture, su0, sv0, 0);
+
+				putfff4(buffer, vx3 + pushX, vy3 + pushY, vz3 + pushZ, alphaBias | color3);
+				put2222(buffer, texture, su2, sv2, 0);
+
+				putfff4(buffer, vx2 + pushX, vy2 + pushY, vz2 + pushZ, alphaBias | color2);
+				put2222(buffer, texture, su1, sv1, 0);
+
+				len += 3;
+			}
 		}
 
 		return len;

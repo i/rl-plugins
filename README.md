@@ -27,6 +27,26 @@ Code: `PainterlyPass.java` (the pass) and `painterly_frag.glsl` (the styles). It
 is a few dozen texture reads; Kuwahara reads land between pixel pairs, so each averages a 2x2
 block.
 
+## Sprites
+
+The **Sprites** section draws players and NPCs as flat cut-outs, like RuneScape Classic or Paper
+Mario. Each frame, every actor's facing is snapped to one of 8 views relative to the camera (or
+the left and right sides in **2 directions** mode, with a paper flip between them), and its model is
+squashed into a card facing the camera as it's uploaded. **Pin viewing angle** draws every sprite as
+if seen from the same height, however far the camera tilts. NPCs larger than **Max NPC size** and
+anything in **Keep 3D** (names or IDs) stay 3D. **Round shadows** draws a soft shadow under each
+sprite in the art style pass, which then runs even with the art style off. A hotkey toggles sprites.
+
+Flattening turns some faces away from the camera, so each sprite face is also drawn reversed and
+pushed slightly behind the card: it fills the holes culling would leave, without covering the
+front. Depth bias is skipped on sprites, since the card is far thinner than the bias.
+
+Limits: the game tests clicks against the real 3D model at its real facing, so click areas are
+close to the sprite but not exact. Actors on boats (other world views) stay 3D.
+
+Code: `SpriteManager.java` (facings and the flattening view) and `ModelUploader.java` (flattening
+during upload).
+
 ## Lo-fi audio
 
 Plays the game's audio slower (**Playback speed**, 92% by default) while the speed drifts a

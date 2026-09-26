@@ -37,6 +37,11 @@ class PainterlyPass
 	@Inject
 	private LofiConfig config;
 
+	@Inject
+	private SpriteManager spriteManager;
+
+	private final float[] spriteShadows = new float[SpriteManager.MAX_SHADOWS * 4];
+
 	private final long startNanos = System.nanoTime();
 	private final AdaptivePalette adaptivePalette = new AdaptivePalette();
 
@@ -57,6 +62,7 @@ class PainterlyPass
 	private int uniCanvasStrength;
 	private int uniHueSteps;
 	private int uniSpriteShadowCount;
+	private int uniSpriteShadows;
 	private int uniInvProjectionMatrix;
 	private int uniCameraPos;
 	private int uniAdaptivePalette;
@@ -115,6 +121,7 @@ class PainterlyPass
 		uniCanvasStrength = glGetUniformLocation(program, "canvasStrength");
 		uniHueSteps = glGetUniformLocation(program, "hueSteps");
 		uniSpriteShadowCount = glGetUniformLocation(program, "spriteShadowCount");
+		uniSpriteShadows = glGetUniformLocation(program, "spriteShadows");
 		uniInvProjectionMatrix = glGetUniformLocation(program, "invProjectionMatrix");
 		uniCameraPos = glGetUniformLocation(program, "cameraPos");
 		uniAdaptivePalette = glGetUniformLocation(program, "adaptivePalette");
@@ -181,7 +188,9 @@ class PainterlyPass
 			failedStyle = null;
 			targetsBroken = false;
 		}
-		if (config.painterlyStyle() == PainterlyStyle.OFF || program == 0 || targetsBroken)
+		// Round sprite shadows are drawn by this pass, so it also runs with the art style off
+		boolean needed = config.painterlyStyle() != PainterlyStyle.OFF || spriteManager.isRoundShadowsEnabled();
+		if (!needed || program == 0 || targetsBroken)
 		{
 			return defaultFramebuffer;
 		}
@@ -273,7 +282,13 @@ class PainterlyPass
 		glUniform1i(uniPaintRadius, config.painterlyPaintRadius());
 		glUniform1f(uniCanvasStrength, config.painterlyCanvasStrength() / 100f);
 		glUniform1i(uniHueSteps, config.painterlyHueSteps());
-		glUniform1i(uniSpriteShadowCount, 0);
+		// Shadows only make sense with the depth they were recorded against
+		int shadowCount = frameHasDepth && spriteManager.isRoundShadowsEnabled() ? spriteManager.copyShadows(spriteShadows) : 0;
+		glUniform1i(uniSpriteShadowCount, shadowCount);
+		if (shadowCount > 0)
+		{
+			glUniform4fv(uniSpriteShadows, spriteShadows);
+		}
 		glUniform1i(uniAdaptivePalette, UNIT_PALETTE);
 		glUniform1i(uniAdaptiveColors, paletteTexture != 0 ? Math.min(colors, AdaptivePalette.MAX_COLORS) : 0);
 		if (invProjection != null)
