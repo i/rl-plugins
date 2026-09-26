@@ -35,7 +35,7 @@ block.
 
 **Chat bubbles** (on by default, in the Art style section) draws overhead text, like public chat
 and NPC shouts, as comic book speech bubbles with a tail pointing at the speaker. The game's own
-overhead text is hidden by zeroing its display timer, so the chat effects (wave, scroll, colours)
+overhead text is replaced with a blank, like RuneLite's chat filter does, so the chat effects (wave, scroll, colours)
 are not shown. Bubbles are part of the UI, so **HUD strength** decides how much the art style
 paints them. Code: `ChatBubbleOverlay.java`.
 

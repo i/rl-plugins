@@ -29,7 +29,8 @@ import net.runelite.client.util.Text;
 
 /**
  * Draws overhead text, like public chat and NPC shouts, as comic book speech bubbles. The game's own overhead
- * text is hidden by zeroing its display timer, see {@link #hideGameText}. Everything runs on the client thread.
+ * text is hidden by replacing it with a blank, the way RuneLite's chat filter does. Everything runs on the
+ * client thread.
  */
 @Singleton
 class ChatBubbleOverlay extends Overlay
@@ -47,6 +48,8 @@ class ChatBubbleOverlay extends Overlay
 	private static final int HEAD_CLEARANCE = 20;
 	private static final Color FILL = new Color(255, 253, 245);
 	private static final Color INK = new Color(20, 20, 20);
+	/** What the game's overhead text is replaced with. A space rather than empty, like RuneLite's chat filter. */
+	private static final String BLANK = " ";
 
 	private static final class Bubble
 	{
@@ -72,32 +75,18 @@ class ChatBubbleOverlay extends Overlay
 		setPriority(OverlayPriority.HIGH);
 	}
 
-	/** Shows text over an actor as a bubble, and hides the game's own overhead text for it. */
+	/** Shows text over an actor as a bubble, and blanks the game's own overhead text for it. */
 	void show(Actor actor, String overheadText)
 	{
 		String text = overheadText == null ? "" : Text.removeTags(overheadText).trim();
+		// Blank text is either the game clearing it or our own blanking below; the bubble times out on its own
 		if (text.isEmpty())
 		{
-			bubbles.remove(actor);
 			return;
 		}
 		bubbles.put(actor, new Bubble(text, System.currentTimeMillis()));
-		actor.setOverheadCycle(0);
-	}
-
-	/**
-	 * Zeroes the game's overhead text timer for every actor with a bubble. Call before each frame is drawn: for
-	 * some messages, like the local player's own chat, the game starts the timer after announcing the text.
-	 */
-	void hideGameText()
-	{
-		for (Actor actor : bubbles.keySet())
-		{
-			if (actor != null && actor.getOverheadCycle() > 0)
-			{
-				actor.setOverheadCycle(0);
-			}
-		}
+		// Fires OverheadTextChanged again, with blank text, which is ignored above
+		actor.setOverheadText(BLANK);
 	}
 
 	void clear()
