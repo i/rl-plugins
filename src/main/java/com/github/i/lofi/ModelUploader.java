@@ -237,8 +237,10 @@ class ModelUploader
 				}
 				if (facing || flipped)
 				{
+					// Flattening a sprite, and pinning its viewing angle, can move vertices outside the model's
+					// original bounds, so the sort bucket is clamped rather than trusted
 					int distance = radius + (distances[v1] + distances[v2] + distances[v3]) / 3;
-					assert distance >= 0 && distance < diameter;
+					distance = Math.max(0, Math.min(diameter - 1, distance));
 
 					if (zsortTail[distance] == (char) -1)
 					{
