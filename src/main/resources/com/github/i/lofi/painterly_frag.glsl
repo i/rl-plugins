@@ -9,6 +9,7 @@
 #define STYLE_OIL 3
 #define STYLE_ACRYLIC 4
 #define STYLE_LANDSCAPE 5
+#define STYLE_PAPER_CUTOUT 6
 
 // Debug view ids must match rs117.hd.config.PainterlyDebugView.
 #define DEBUG_SCENE 1
@@ -539,6 +540,85 @@ vec3 landscapePainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(color, 0.0, 1.0), mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
+// Paper cutout, like Archer's ransom-note look: the frame is cut into flat pieces of colored paper glued on top
+// of each other. Each piece has its own paper, is nudged slightly out of place, shows a thin white cut edge, and
+// casts a small shadow onto whatever it sits on.
+const float CUTOUT_SHADOW_PIXELS = 3.0;
+const float CUTOUT_JITTER_PIXELS = 1.5;
+const vec3 CUTOUT_EDGE_COLOR = vec3(0.97, 0.95, 0.9);
+
+// A piece's flat color: a small blur of the frame, snapped to a few hues, saturations and shades so each patch
+// of similar color becomes one piece
+vec3 cutoutColor(vec2 px) {
+    vec3 blurred = (
+        sampleColor(px + vec2(-1.5, -1.5)) + sampleColor(px + vec2(1.5, -1.5)) +
+        sampleColor(px + vec2(-1.5, 1.5)) + sampleColor(px + vec2(1.5, 1.5))
+    ) * 0.25;
+    vec3 hsv = srgbToHsv(clamp(blurred, 0.0, 1.0));
+    float hues = hueSteps > 0 ? float(hueSteps) : 10.0;
+    hsv.x = round(hsv.x * hues) / hues;
+    hsv.y = round(hsv.y * 3.0) / 3.0;
+    hsv.z = (floor(hsv.z * 4.0) + 0.5) / 4.0;
+    return hsvToSrgb(hsv);
+}
+
+// Identifies the piece under a pixel: its color, plus the character it belongs to so characters are cut
+// separately from same-colored ground. w is how far away the piece is, for deciding which piece is on top.
+vec4 cutoutPiece(vec2 px) {
+    vec3 color = cutoutColor(px);
+    float id = objectId(px);
+    // Characters always sit on top
+    float depth = id > 0.0 ? 0.0 : viewDistance(px);
+    return vec4(color + id * 7.0, depth);
+}
+
+bool samePiece(vec4 a, vec4 b) {
+    vec3 d = a.rgb - b.rgb;
+    return dot(d, d) < 1e-4;
+}
+
+vec3 paperCutout(vec2 px, vec2 screenPx) {
+    // Nudge each piece a little out of place, seeded by the piece, so edges don't line up like a clean render
+    vec4 guess = cutoutPiece(px);
+    float seed = hash12(guess.rg * 97.0 + guess.b * 13.0);
+    vec2 jitter = (vec2(seed, hash12(vec2(seed, 3.7))) - 0.5) * 2.0 * CUTOUT_JITTER_PIXELS;
+    vec2 at = px + jitter;
+    vec4 piece = cutoutPiece(at);
+    vec3 color = cutoutColor(at);
+
+    // Each piece is cut from its own sheet: a slight tint, and fibers running at the piece's own angle
+    float pieceSeed = hash12(piece.rg * 61.0 + piece.b * 29.0);
+    float angle = pieceSeed * 6.2831853;
+    vec2 along = vec2(cos(angle), sin(angle));
+    float fibers = valueNoise(vec2(dot(screenPx, along) * 0.06, dot(screenPx, vec2(-along.y, along.x)) * 0.6));
+    float flecks = hash12(floor(screenPx / 2.0) + pieceSeed * 71.0);
+    color *= 1.0 + (pieceSeed - 0.5) * 0.08;
+    color *= 1.0 + ((fibers - 0.5) * 0.12 + (flecks - 0.5) * 0.06) * mix(0.4, 1.0, canvasStrength);
+
+    // A thin white cut edge where this piece lies on top of a different one
+    float edgeWidth = max(lineWidth * 0.75, 1.0);
+    float edge = 0.0;
+    for (int i = 0; i < 4; i++) {
+        vec2 offset = vec2(i == 0 ? 1.0 : i == 1 ? -1.0 : 0.0, i == 2 ? 1.0 : i == 3 ? -1.0 : 0.0) * edgeWidth;
+        vec4 neighbor = cutoutPiece(at + offset);
+        if (!samePiece(piece, neighbor) && piece.w <= neighbor.w)
+            edge = 1.0;
+    }
+    color = mix(color, CUTOUT_EDGE_COLOR, edge * 0.9);
+
+    // A small soft shadow cast down and to the right by any piece on top of this one
+    float shadow = 0.0;
+    for (int i = 1; i <= 2; i++) {
+        float reach = CUTOUT_SHADOW_PIXELS * float(i) / 2.0;
+        vec4 caster = cutoutPiece(at + vec2(-reach, reach));
+        if (!samePiece(piece, caster) && caster.w < piece.w)
+            shadow = max(shadow, 1.0 - float(i - 1) * 0.45);
+    }
+    color *= 1.0 - 0.3 * shadow * (1.0 - edge);
+
+    return clamp(color, 0.0, 1.0);
+}
+
 void main() {
     vec2 px = fUv * resolution;
     vec2 screenPx = gl_FragCoord.xy;
@@ -569,6 +649,8 @@ void main() {
         color = acrylicPainting(px, screenPx);
     } else if (style == STYLE_LANDSCAPE) {
         color = landscapePainting(px, screenPx);
+    } else if (style == STYLE_PAPER_CUTOUT) {
+        color = paperCutout(px, screenPx);
     } else {
         color = squiggleVision(px, screenPx);
     }

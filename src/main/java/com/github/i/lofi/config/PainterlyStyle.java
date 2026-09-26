@@ -14,7 +14,8 @@ public enum PainterlyStyle {
 	OIL("Oil painting", 3),
 	ACRYLIC("Acrylic painting", 4),
 	// Kept as WATERCOLOR so saved settings from when it was the watercolor style still load
-	WATERCOLOR("Landscape painting", 5);
+	WATERCOLOR("Landscape painting", 5),
+	PAPER_CUTOUT("Paper cutout", 6);
 
 	private final String name;
 
