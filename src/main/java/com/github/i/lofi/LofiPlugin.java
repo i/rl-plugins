@@ -190,6 +190,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private int lastStretchedCanvasWidth;
 	private int lastStretchedCanvasHeight;
 	private AntiAliasingMode lastAntiAliasingMode;
+	// Share of the framebuffer's resolution the scene is drawn at, from the Render scale setting. Only changes
+	// when the scene FBO is recreated, so the FBO, viewport and copies always agree.
+	private float sceneScale = 1f;
 	private int lastAnisotropicFilteringLevel = -1;
 
 	private GpuFloatBuffer uniformBuffer;
@@ -419,6 +422,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 				lastCanvasWidth = lastCanvasHeight = -1;
 				lastStretchedCanvasWidth = lastStretchedCanvasHeight = -1;
 				lastAntiAliasingMode = null;
+				sceneScale = -1f;
 
 				textureArrayId = -1;
 
@@ -833,8 +837,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
 		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 
-		width = getScaledValue(transform.getScaleX(), width);
-		height = getScaledValue(transform.getScaleY(), height);
+		width = toSceneScale(getScaledValue(transform.getScaleX(), width));
+		height = toSceneScale(getScaledValue(transform.getScaleY(), height));
 
 		if (aaSamples > 0)
 		{
@@ -988,8 +992,10 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			// Re-create fbo
 			if (lastStretchedCanvasWidth != stretchedCanvasWidth
 				|| lastStretchedCanvasHeight != stretchedCanvasHeight
-				|| lastAntiAliasingMode != antiAliasingMode)
+				|| lastAntiAliasingMode != antiAliasingMode
+				|| sceneScale != config.renderScale() / 100f)
 			{
+				sceneScale = config.renderScale() / 100f;
 				shutdownFbo();
 
 				// Bind default FBO to check whether anti-aliasing is forced
@@ -1046,7 +1052,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			renderWidthOff = (int) Math.floor(scaleFactorX * (renderWidthOff)) - padding;
 		}
 
-		glDpiAwareViewport(renderWidthOff, renderCanvasHeight - renderViewportHeight - renderHeightOff, renderViewportWidth, renderViewportHeight);
+		sceneViewport(renderWidthOff, renderCanvasHeight - renderViewportHeight - renderHeightOff, renderViewportWidth, renderViewportHeight);
 
 		glUseProgram(glProgram);
 
@@ -1165,21 +1171,27 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		sceneFboValid = true;
 	}
 
-	private void blitSceneFbo(int targetFbo)
+	/**
+	 * Copies the scene into a framebuffer of the given size, stretching it if the scene is drawn at a lower render
+	 * scale.
+	 */
+	private void blitSceneFbo(
+		int targetFbo,
+		int targetWidth,
+		int targetHeight
+	)
 	{
-		int width = lastStretchedCanvasWidth;
-		int height = lastStretchedCanvasHeight;
-
 		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
 		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 
-		width = getScaledValue(transform.getScaleX(), width);
-		height = getScaledValue(transform.getScaleY(), height);
+		int width = toSceneScale(getScaledValue(transform.getScaleX(), lastStretchedCanvasWidth));
+		int height = toSceneScale(getScaledValue(transform.getScaleY(), lastStretchedCanvasHeight));
+		boolean stretched = width != targetWidth || height != targetHeight;
 
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, targetFbo);
-		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
-			GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glBlitFramebuffer(0, 0, width, height, 0, 0, targetWidth, targetHeight,
+			GL_COLOR_BUFFER_BIT, stretched ? GL_LINEAR : GL_NEAREST);
 
 		// Reset
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, targetFbo);
@@ -1698,12 +1710,18 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
 		final AffineTransform transform = graphicsConfiguration.getDefaultTransform();
 		final Dimension frameSize = client.isStretchedEnabled() ? client.getStretchedDimensions() : new Dimension(canvasWidth, canvasHeight);
+		final int screenWidth = getScaledValue(transform.getScaleX(), frameSize.width);
+		final int screenHeight = getScaledValue(transform.getScaleY(), frameSize.height);
+		// The art style runs at the scene's render scale, then gets stretched to the screen
 		final int frameFbo = painterlyPass.beginFrame(
 			defaultFbo,
-			getScaledValue(transform.getScaleX(), frameSize.width),
-			getScaledValue(transform.getScaleY(), frameSize.height),
+			toSceneScale(screenWidth),
+			toSceneScale(screenHeight),
 			sceneFboValid ? fboScene : -1
 		);
+		final boolean capturing = frameFbo != defaultFbo;
+		// Below full scale the UI is drawn after the art style, straight to the screen, so it stays sharp
+		final boolean uiAfterStyle = capturing && sceneScale < 1f;
 		glBindFramebuffer(GL_FRAMEBUFFER, frameFbo);
 
 		glClearColor(0, 0, 0, 1);
@@ -1711,23 +1729,38 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 		if (sceneFboValid)
 		{
-			blitSceneFbo(frameFbo);
+			if (capturing)
+			{
+				blitSceneFbo(frameFbo, toSceneScale(screenWidth), toSceneScale(screenHeight));
+			}
+			else
+			{
+				blitSceneFbo(frameFbo, screenWidth, screenHeight);
+			}
 		}
 		painterlyPass.clearCoverage();
 
 		// Texture on UI
-		drawUi(overlayColor, canvasHeight, canvasWidth);
+		if (!uiAfterStyle)
+		{
+			drawUi(overlayColor, canvasHeight, canvasWidth);
+		}
 
 		// An exception here would unwind into the client's frame and skip the rest of it, which breaks things like
 		// NPC and object interactions without any visible error
 		try
 		{
-			painterlyPass.endFrame(defaultFbo);
+			painterlyPass.endFrame(defaultFbo, screenWidth, screenHeight);
 		}
 		catch (RuntimeException ex)
 		{
 			painterlyPass.fail(ex);
 			glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+		}
+		if (uiAfterStyle)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, defaultFbo);
+			drawUi(overlayColor, canvasHeight, canvasWidth);
 		}
 
 		try
@@ -2362,6 +2395,24 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private int getScaledValue(final double scale, final int value)
 	{
 		return (int) (value * scale);
+	}
+
+	/** A size in framebuffer pixels at the scene's render scale, see {@link LofiConfig#renderScale}. */
+	private int toSceneScale(int value)
+	{
+		return Math.max(1, Math.round(value * sceneScale));
+	}
+
+	/** Like glDpiAwareViewport, for the scene FBO, which is drawn at the render scale. */
+	private void sceneViewport(final int x, final int y, final int width, final int height)
+	{
+		final GraphicsConfiguration graphicsConfiguration = clientUI.getGraphicsConfiguration();
+		final AffineTransform t = graphicsConfiguration.getDefaultTransform();
+		glViewport(
+			Math.round(getScaledValue(t.getScaleX(), x) * sceneScale),
+			Math.round(getScaledValue(t.getScaleY(), y) * sceneScale),
+			toSceneScale(getScaledValue(t.getScaleX(), width)),
+			toSceneScale(getScaledValue(t.getScaleY(), height)));
 	}
 
 	private void glDpiAwareViewport(final int x, final int y, final int width, final int height)

@@ -437,6 +437,21 @@ public interface LofiConfig extends Config
 		return true;
 	}
 
+	@Units(Units.PERCENT)
+	@Range(min = 25, max = 100)
+	@ConfigItem(
+		keyName = "renderScale",
+		name = "Render scale",
+		description = "Draws the 3D scene and art style at this share of the screen's resolution, then stretches it to fit. "
+			+ "The interface stays sharp. Lower is much faster on weak GPUs and high resolution screens. "
+			+ "Below 100%, HUD strength has no effect, since the interface is drawn after the art style.",
+		position = 3
+	)
+	default int renderScale()
+	{
+		return 100;
+	}
+
 	@ConfigItem(
 		keyName = "antiAliasingMode",
 		name = "Anti aliasing",

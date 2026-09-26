@@ -87,6 +87,12 @@ class PainterlyPass
 	private int fboObjectId;
 	private int texObjectId;
 
+	// The styled frame, when it's stretched to a larger screen
+	private int fboOutput;
+	private int texOutput;
+	private int outputWidth;
+	private int outputHeight;
+
 	private boolean targetsBroken;
 	// The style that was active when the pass failed, so picking another style retries
 	private PainterlyStyle failedStyle;
@@ -251,8 +257,16 @@ class PainterlyPass
 
 	/**
 	 * Paints the captured frame to the screen through the art-style shader. Does nothing if no frame was captured.
+	 * A frame smaller than the screen, from a lower render scale, is styled at its own size and then stretched.
+	 *
+	 * @param screenWidth  screen width in framebuffer pixels
+	 * @param screenHeight screen height in framebuffer pixels
 	 */
-	void endFrame(int defaultFramebuffer)
+	void endFrame(
+		int defaultFramebuffer,
+		int screenWidth,
+		int screenHeight
+	)
 	{
 		if (!capturingFrame)
 		{
@@ -269,7 +283,12 @@ class PainterlyPass
 		int paletteTexture = colors > 0 ?
 			adaptivePalette.update(fboFrame, frameWidth, frameHeight, colors, UNIT_PALETTE_WORK) : 0;
 
-		glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
+		boolean stretch = screenWidth != frameWidth || screenHeight != frameHeight;
+		if (stretch && !ensureOutputTarget(defaultFramebuffer))
+		{
+			return;
+		}
+		glBindFramebuffer(GL_FRAMEBUFFER, stretch ? fboOutput : defaultFramebuffer);
 		glViewport(0, 0, frameWidth, frameHeight);
 		glDisable(GL_DEPTH_TEST);
 		glDisable(GL_BLEND);
@@ -321,6 +340,57 @@ class PainterlyPass
 
 		glBindVertexArray(0);
 		glUseProgram(0);
+
+		if (stretch)
+		{
+			// MS Paint keeps its hard pixels; the painted styles stretch smoothly
+			int filter = config.painterlyStyle() == PainterlyStyle.MS_PAINT ? GL_NEAREST : GL_LINEAR;
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, fboOutput);
+			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, defaultFramebuffer);
+			glBlitFramebuffer(0, 0, frameWidth, frameHeight, 0, 0, screenWidth, screenHeight, GL_COLOR_BUFFER_BIT, filter);
+			glBindFramebuffer(GL_FRAMEBUFFER, defaultFramebuffer);
+		}
+	}
+
+	/** The styled frame before it's stretched to the screen, at the frame's size */
+	private boolean ensureOutputTarget(int defaultFramebuffer)
+	{
+		if (fboOutput != 0 && outputWidth == frameWidth && outputHeight == frameHeight)
+		{
+			return true;
+		}
+		destroyOutputTarget();
+
+		texOutput = createTexture(UNIT_COLOR);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, frameWidth, frameHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+		glActiveTexture(GL_TEXTURE0);
+
+		fboOutput = createFramebuffer(GL_COLOR_ATTACHMENT0, texOutput, defaultFramebuffer);
+		if (fboOutput == 0)
+		{
+			return false;
+		}
+		outputWidth = frameWidth;
+		outputHeight = frameHeight;
+		return true;
+	}
+
+	private void destroyOutputTarget()
+	{
+		if (fboOutput != 0)
+		{
+			glDeleteFramebuffers(fboOutput);
+		}
+		fboOutput = 0;
+		if (texOutput != 0)
+		{
+			glDeleteTextures(texOutput);
+		}
+		texOutput = 0;
+		outputWidth = 0;
+		outputHeight = 0;
 	}
 
 	/**
@@ -479,6 +549,7 @@ class PainterlyPass
 	void destroyTargets()
 	{
 		destroyFrameTarget();
+		destroyOutputTarget();
 		destroyDepthTarget();
 		adaptivePalette.destroyTargets();
 		capturingFrame = false;

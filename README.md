@@ -31,6 +31,16 @@ Code: `PainterlyPass.java` (the pass) and `painterly_frag.glsl` (the styles). It
 is a few dozen texture reads; Kuwahara reads land between pixel pairs, so each averages a 2x2
 block.
 
+## Performance
+
+**Render scale** (25-100%, default 100%) draws the 3D scene and the art style at that share of the
+screen's resolution, then stretches the result to fit; MS Paint stretches with hard pixels, the
+other styles smoothly. The interface is drawn afterwards at full resolution, so it stays sharp, but
+that means **HUD strength** has no effect below 100%. At 50% there are a quarter of the pixels to
+draw, style and copy, which is the biggest single speed-up on integrated GPUs and high resolution
+screens. Sizes in the art style settings (brush size, outline thickness) are in scaled pixels, so
+they look larger on screen at lower scales.
+
 ## Chat bubbles
 
 **Chat bubbles** (on by default, in the Art style section) draws overhead text, like public chat
