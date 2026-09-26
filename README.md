@@ -67,8 +67,10 @@ Flattening turns some faces away from the camera, so each sprite face is also dr
 pushed slightly behind the card: it fills the holes culling would leave, without covering the
 front. Depth bias is skipped on sprites, since the card is far thinner than the bias.
 
-Limits: the game tests clicks against the real 3D model at its real facing, so click areas are
-close to the sprite but not exact. Actors on boats (other world views) stay 3D.
+Limits: the game tests clicks against the real 3D model at its real facing, and that can't be
+turned off, so the renderer also click tests the sprite's own flattened shape: a sprite is
+clickable wherever it's drawn, plus wherever the hidden 3D model would be. Highlight outlines from
+other plugins still follow the 3D model. Actors on boats (other world views) stay 3D.
 
 Code: `SpriteManager.java` (facings and the flattening view) and `ModelUploader.java` (flattening
 during upload).

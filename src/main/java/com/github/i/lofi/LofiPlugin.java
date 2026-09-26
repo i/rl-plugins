@@ -1391,6 +1391,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			{
 				spriteManager.addShadow(x, y, z, sprite.shadowRadius);
 			}
+			checkSpriteClickbox(worldProjection, m, spriteView, sprite, x, y, z, gameObject.getHash());
 		}
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE * (spriteView != null ? 2 : 1);
@@ -1453,6 +1454,61 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 				uploader.setObjectId(0);
 			}
 			o.addRange(ctx.projection, scene, 0);
+		}
+	}
+
+	// Scratch copies of a model's vertices while its sprite shape is click tested, see checkSpriteClickbox
+	private float[] clickboxX = new float[0];
+	private float[] clickboxY = new float[0];
+	private float[] clickboxZ = new float[0];
+	private final float[] clickboxVertex = new float[3];
+
+	/**
+	 * The client click tests the real 3D model at its real facing before the renderer sees it, so the flat sprite
+	 * is only clickable where the two overlap. This also tests the sprite's own shape, by briefly moving the
+	 * model's vertices to where the sprite draws them: rotated to the snapped facing and flattened the same way as
+	 * ModelUploader. Client thread only, since it edits the model in place.
+	 */
+	private void checkSpriteClickbox(Projection projection, Model model, SpriteManager.SpriteView view, SpriteManager.ActorSprite sprite, int x, int y, int z, long hash)
+	{
+		int count = model.getVerticesCount();
+		float[] vx = model.getVerticesX();
+		float[] vy = model.getVerticesY();
+		float[] vz = model.getVerticesZ();
+		if (clickboxX.length < count)
+		{
+			clickboxX = new float[count];
+			clickboxY = new float[count];
+			clickboxZ = new float[count];
+		}
+		System.arraycopy(vx, 0, clickboxX, 0, count);
+		System.arraycopy(vy, 0, clickboxY, 0, count);
+		System.arraycopy(vz, 0, clickboxZ, 0, count);
+
+		float sin = sprite.orientation != 0 ? Perspective.SINE[sprite.orientation] / 65536f : 0;
+		float cos = sprite.orientation != 0 ? Perspective.COSINE[sprite.orientation] / 65536f : 1;
+		try
+		{
+			for (int v = 0; v < count; v++)
+			{
+				float px = clickboxX[v];
+				float pz = clickboxZ[v];
+				float rx = pz * sin + px * cos;
+				float rz = pz * cos - px * sin;
+				view.flatten(rx, clickboxY[v], rz, sprite.width, clickboxVertex);
+				vx[v] = clickboxVertex[0];
+				vy[v] = clickboxVertex[1];
+				vz[v] = clickboxVertex[2];
+			}
+			model.calculateBoundsCylinder();
+			client.checkClickbox(projection, model, 0, x, y, z, hash);
+		}
+		finally
+		{
+			System.arraycopy(clickboxX, 0, vx, 0, count);
+			System.arraycopy(clickboxY, 0, vy, 0, count);
+			System.arraycopy(clickboxZ, 0, vz, 0, count);
+			model.calculateBoundsCylinder();
 		}
 	}
 
