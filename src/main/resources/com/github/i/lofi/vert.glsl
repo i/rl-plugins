@@ -67,6 +67,8 @@ uniform vec2 textureAnimations[TEXTURE_COUNT];
 out vec4 fColor;
 noperspective centroid out float fHsl;
 flat out int fTextureId;
+// Object id for outlines, from the spare short of tex: players and NPCs 1-255, everything else 0
+flat out int fObjectId;
 out vec2 fUv;
 out float fFogAmount;
 #ifdef ZBUF_DEBUG
@@ -80,6 +82,7 @@ float fogFactorLinear(const float dist, const float start, const float end) {
 }
 
 void main() {
+  fObjectId = tex.w;
   vec4 vert = vec4(vertf + base, 1);
   float a = float(abhsl >> 24 & 0xff) / 255.f;
   int bias = (abhsl >> 16) & 0xff;

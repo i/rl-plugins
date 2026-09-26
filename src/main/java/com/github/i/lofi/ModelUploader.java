@@ -92,6 +92,8 @@ class ModelUploader
 	@Nullable
 	private SpriteManager.SpriteView sprite;
 	private float spriteWidth;
+	// Written into every uploaded vertex for outlines, 0 for none, see setObjectId
+	private int objectId;
 	private final float[] spriteVertex = new float[3];
 	// Which faces of the model being sorted were reversed to fill holes, see uploadSortedModel
 	private final boolean[] spriteFlippedFaces = new boolean[MAX_FACE_COUNT];
@@ -103,6 +105,15 @@ class ModelUploader
 	{
 		sprite = view;
 		spriteWidth = width;
+	}
+
+	/**
+	 * Tags the following uploads with an object id from 1 to 255 in each vertex's spare short, so the art style
+	 * pass can outline the object by its shape. 0 for untagged.
+	 */
+	void setObjectId(int id)
+	{
+		objectId = id;
 	}
 
 	/** Flattens a vertex offset from the model's base into spriteVertex. */
@@ -298,21 +309,21 @@ class ModelUploader
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v1] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color1;
 					vertexBuffer[vbOff++] = ((su0 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv0 & 0xffff;
+					vertexBuffer[vbOff++] = objectId << 16 | sv0 & 0xffff;
 
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v2] + pushX);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v2] + pushY);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v2] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color2;
 					vertexBuffer[vbOff++] = ((su1 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv1 & 0xffff;
+					vertexBuffer[vbOff++] = objectId << 16 | sv1 & 0xffff;
 
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalX[v3] + pushX);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalY[v3] + pushY);
 					vertexBuffer[vbOff++] = Float.floatToIntBits(modelLocalZ[v3] + pushZ);
 					vertexBuffer[vbOff++] = alphaBias | color3;
 					vertexBuffer[vbOff++] = ((su2 & 0xffff) << 16 | (texture & 0xffff));
-					vertexBuffer[vbOff++] = sv2 & 0xffff;
+					vertexBuffer[vbOff++] = objectId << 16 | sv2 & 0xffff;
 				}
 			}
 		}
@@ -687,13 +698,13 @@ class ModelUploader
 			int texture = faceTextures != null ? faceTextures[face] + 1 : 0;
 
 			putfff4(buffer, vx1, vy1, vz1, alphaBias | color1);
-			put2222(buffer, texture, su0, sv0, 0);
+			put2222(buffer, texture, su0, sv0, objectId);
 
 			putfff4(buffer, vx2, vy2, vz2, alphaBias | color2);
-			put2222(buffer, texture, su1, sv1, 0);
+			put2222(buffer, texture, su1, sv1, objectId);
 
 			putfff4(buffer, vx3, vy3, vz3, alphaBias | color3);
-			put2222(buffer, texture, su2, sv2, 0);
+			put2222(buffer, texture, su2, sv2, objectId);
 
 			len += 3;
 
@@ -707,13 +718,13 @@ class ModelUploader
 				float pushZ = sprite.dPz * SPRITE_FLIPPED_FACE_PUSH;
 
 				putfff4(buffer, vx1 + pushX, vy1 + pushY, vz1 + pushZ, alphaBias | color1);
-				put2222(buffer, texture, su0, sv0, 0);
+				put2222(buffer, texture, su0, sv0, objectId);
 
 				putfff4(buffer, vx3 + pushX, vy3 + pushY, vz3 + pushZ, alphaBias | color3);
-				put2222(buffer, texture, su2, sv2, 0);
+				put2222(buffer, texture, su2, sv2, objectId);
 
 				putfff4(buffer, vx2 + pushX, vy2 + pushY, vz2 + pushZ, alphaBias | color2);
-				put2222(buffer, texture, su1, sv1, 0);
+				put2222(buffer, texture, su1, sv1, objectId);
 
 				len += 3;
 			}

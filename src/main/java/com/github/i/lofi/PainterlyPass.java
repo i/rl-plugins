@@ -25,6 +25,8 @@ class PainterlyPass
 	private static final int UNIT_PALETTE = 4;
 	// Used while the adaptive palette is refreshed, before the painting pass binds its own textures
 	private static final int UNIT_PALETTE_WORK = 5;
+	// Unit 6 is also used by the palette work, which takes two units
+	private static final int UNIT_OBJECT_ID = 7;
 
 	// Keeps the boil seed small enough to stay precise as a float over long sessions
 	private static final int BOIL_SEED_PERIOD = 1024;
@@ -65,6 +67,7 @@ class PainterlyPass
 	private int uniSpriteShadows;
 	private int uniInvProjectionMatrix;
 	private int uniCameraPos;
+	private int uniObjectIds;
 	private int uniAdaptivePalette;
 	private int uniAdaptiveColors;
 
@@ -79,6 +82,10 @@ class PainterlyPass
 	private int texDepth;
 	private int depthWidth;
 	private int depthHeight;
+
+	// Resolved scene object ids, at the same size as the depth
+	private int fboObjectId;
+	private int texObjectId;
 
 	private boolean targetsBroken;
 	// The style that was active when the pass failed, so picking another style retries
@@ -124,6 +131,7 @@ class PainterlyPass
 		uniSpriteShadows = glGetUniformLocation(program, "spriteShadows");
 		uniInvProjectionMatrix = glGetUniformLocation(program, "invProjectionMatrix");
 		uniCameraPos = glGetUniformLocation(program, "cameraPos");
+		uniObjectIds = glGetUniformLocation(program, "objectIds");
 		uniAdaptivePalette = glGetUniformLocation(program, "adaptivePalette");
 		uniAdaptiveColors = glGetUniformLocation(program, "adaptiveColors");
 
@@ -270,6 +278,7 @@ class PainterlyPass
 		glUseProgram(program);
 		glUniform1i(uniSceneColor, UNIT_COLOR);
 		glUniform1i(uniSceneDepth, UNIT_DEPTH);
+		glUniform1i(uniObjectIds, UNIT_OBJECT_ID);
 		glUniform2f(uniResolution, frameWidth, frameHeight);
 		glUniform4f(uniSceneViewport, sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
 		glUniform1i(uniHasDepth, frameHasDepth ? 1 : 0);
@@ -301,6 +310,8 @@ class PainterlyPass
 		glBindTexture(GL_TEXTURE_2D, texFrame);
 		glActiveTexture(GL_TEXTURE0 + UNIT_DEPTH);
 		glBindTexture(GL_TEXTURE_2D, texDepth);
+		glActiveTexture(GL_TEXTURE0 + UNIT_OBJECT_ID);
+		glBindTexture(GL_TEXTURE_2D, texObjectId);
 		glActiveTexture(GL_TEXTURE0 + UNIT_PALETTE);
 		glBindTexture(GL_TEXTURE_2D, paletteTexture);
 		glActiveTexture(GL_TEXTURE0);
@@ -341,6 +352,13 @@ class PainterlyPass
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboDepth);
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+
+		// Object ids, from the scene's second color buffer
+		glReadBuffer(GL_COLOR_ATTACHMENT1);
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboObjectId);
+		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFramebuffer);
 		return true;
 	}
@@ -395,6 +413,17 @@ class PainterlyPass
 
 		fboDepth = createFramebuffer(GL_DEPTH_ATTACHMENT, texDepth, defaultFramebuffer);
 		if (fboDepth == 0)
+		{
+			return false;
+		}
+
+		texObjectId = createTexture(UNIT_OBJECT_ID);
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, 0);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+		glActiveTexture(GL_TEXTURE0);
+		fboObjectId = createFramebuffer(GL_COLOR_ATTACHMENT0, texObjectId, defaultFramebuffer);
+		if (fboObjectId == 0)
 		{
 			return false;
 		}
@@ -485,6 +514,16 @@ class PainterlyPass
 			glDeleteTextures(texDepth);
 		}
 		texDepth = 0;
+		if (fboObjectId != 0)
+		{
+			glDeleteFramebuffers(fboObjectId);
+		}
+		fboObjectId = 0;
+		if (texObjectId != 0)
+		{
+			glDeleteTextures(texObjectId);
+		}
+		texObjectId = 0;
 		depthWidth = 0;
 		depthHeight = 0;
 	}

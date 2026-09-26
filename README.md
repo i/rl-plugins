@@ -17,7 +17,10 @@ tones the style down on the interface if text gets hard to read.
 | Acrylic painting | Flat, saturated paint with thin dark line work on canvas; **Colors** limits the hues |
 
 The scene and UI are drawn into an offscreen frame whose alpha records UI coverage, then painted
-to the screen in one full-screen pass that also reads the scene's depth for outlines.
+to the screen in one full-screen pass that also reads the scene's depth for outlines. Players and
+NPCs are also outlined by their shape: each gets an id from 1 to 255 in its vertices' spare short,
+the scene shader writes it to a second colour buffer, and the pass draws a line wherever it changes,
+so characters stay separate from ground of the same colour.
 
 MS Paint's adaptive palette is picked on the GPU with k-means clustering in OKLab: each frame is
 shrunk to 64x36 samples, and last frame's palette takes one clustering step towards them, so colours

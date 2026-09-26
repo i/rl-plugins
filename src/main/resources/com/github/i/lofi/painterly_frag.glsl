@@ -36,6 +36,7 @@ vec3 hsvToSrgb(vec3 c) {
 
 uniform sampler2D sceneColor;  // the full frame, UI coverage in alpha
 uniform sampler2D sceneDepth;  // scene depth, covering only sceneViewport
+uniform sampler2D objectIds;   // scene object ids / 255, covering only sceneViewport: players and NPCs 1-255, else 0
 uniform vec2 resolution;       // frame size in pixels
 uniform vec4 sceneViewport;    // x, y, width, height of the 3D scene within the frame
 uniform bool hasDepth;
@@ -158,6 +159,16 @@ bool scenePosition(vec2 px, out vec3 position) {
     return true;
 }
 
+// The object id under a pixel, 0-255: players and NPCs have their own, everything else is 0.
+float objectId(vec2 px) {
+    if (!hasDepth)
+        return 0.0;
+    vec2 uv = (px - sceneViewport.xy) / sceneViewport.zw;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
+        return 0.0;
+    return floor(texture(objectIds, uv).r * 255.0 + 0.5);
+}
+
 // Distance from the camera in game units, where one tile is 128 units.
 float viewDistance(vec2 px) {
     vec3 position;
@@ -203,6 +214,7 @@ float outline(vec2 px, float width) {
     float centerLuma = luma(centerColor);
     // The HUD has no depth of its own, so it only gets color lines, at full strength regardless of distance
     float centerUi = center.a;
+    float centerId = objectId(px);
     float edge = 0.0;
 
     for (int i = 0; i < 8; i++) {
@@ -218,9 +230,13 @@ float outline(vec2 px, float width) {
         float colorJump = luma(neighborColor) > centerLuma ? length(neighborColor - centerColor) : 0.0;
         float colorEdge = smoothstep(COLOR_EDGE_LOW, COLOR_EDGE_HIGH, colorJump) * 0.8;
 
+        // Players and NPCs are outlined by their shape even where their colors and depth match what's behind
+        // them. Only the higher id draws, so lines between two characters stay one line thick.
+        float objectEdge = centerId > objectId(neighbor) ? 1.0 - ui : 0.0;
+
         float nearest = min(centerDistance, neighborDistance);
         float fade = mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui);
-        edge = max(edge, max(depthEdge, colorEdge) * fade);
+        edge = max(edge, max(max(depthEdge, colorEdge), objectEdge) * fade);
     }
     return edge;
 }

@@ -38,13 +38,17 @@ uniform float textureLightMode;
 in vec4 fColor;
 noperspective centroid in float fHsl;
 flat in int fTextureId;
+flat in int fObjectId;
 in vec2 fUv;
 in float fFogAmount;
 #ifdef ZBUF_DEBUG
 in float fDepth;
 #endif
 
-out vec4 FragColor;
+layout(location = 0) out vec4 FragColor;
+// Written to the scene's object id buffer, see LofiPlugin.initFbo. Mostly transparent faces leave it alone,
+// since blending uses this output's alpha.
+layout(location = 1) out vec4 ObjectId;
 
 #include "hsl_to_rgb.glsl"
 
@@ -93,6 +97,7 @@ void main() {
 
   vec3 mixedColor = mix(c.rgb, fogColor.rgb, fFogAmount);
   FragColor = vec4(mixedColor, c.a);
+  ObjectId = vec4(float(fObjectId) / 255.0, 0.0, 0.0, c.a >= 0.5 ? 1.0 : 0.0);
 
 #ifdef FRAG_UVS
   if (fTextureId > 0) {

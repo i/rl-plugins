@@ -48,6 +48,7 @@ import net.runelite.api.Client;
 import net.runelite.api.Constants;
 import net.runelite.api.FloatProjection;
 import net.runelite.api.GameObject;
+import net.runelite.api.Actor;
 import net.runelite.api.GameState;
 import net.runelite.api.Model;
 import net.runelite.api.Perspective;
@@ -172,6 +173,8 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	private int fboScene;
 	private boolean sceneFboValid;
 	private int rboColorBuffer;
+	// Object ids for outlines: players and NPCs 1-255, everything else 0. See PainterlyPass.
+	private int rboObjectIdBuffer;
 	private int rboDepthBuffer;
 
 	private int textureArrayId;
@@ -287,6 +290,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 	static int uniBase;
 
 	static final float[] IDENTITY = Mat4.identity();
+	private static final float[] NO_OBJECT_ID = new float[4];
 
 	@Override
 	protected void startUp()
@@ -818,6 +822,14 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_RGBA, width, height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, rboColorBuffer);
 
+		// Object id render buffer, written by frag.glsl's second output
+		rboObjectIdBuffer = glGenRenderbuffers();
+		glBindRenderbuffer(GL_RENDERBUFFER, rboObjectIdBuffer);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_R8, width, height);
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, rboObjectIdBuffer);
+		glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1});
+		glReadBuffer(GL_COLOR_ATTACHMENT0);
+
 		// Depth render buffer
 		rboDepthBuffer = glGenRenderbuffers();
 		glBindRenderbuffer(GL_RENDERBUFFER, rboDepthBuffer);
@@ -848,6 +860,12 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		{
 			glDeleteRenderbuffers(rboColorBuffer);
 			rboColorBuffer = 0;
+		}
+
+		if (rboObjectIdBuffer != 0)
+		{
+			glDeleteRenderbuffers(rboObjectIdBuffer);
+			rboObjectIdBuffer = 0;
 		}
 
 		if (rboDepthBuffer != 0)
@@ -1067,12 +1085,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			glClearColor((sky >> 16 & 0xFF) / 255f, (sky >> 8 & 0xFF) / 255f, (sky & 0xFF) / 255f, 1f);
 			glClearDepth(0d);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+			// The sky color would otherwise fill the object id buffer too
+			glClearBufferfv(GL_COLOR, 1, NO_OBJECT_ID);
 			return;
 		}
 
 		glClearColor(0f, 0f, 0f, 1f);
 		glClearDepth(0d);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+		glClearBufferfv(GL_COLOR, 1, NO_OBJECT_ID);
 
 		int size = skybox.getFaceCount() * 3 * VAO.VERT_SIZE;
 		RenderThread rt = rts[0];
@@ -1340,6 +1361,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		}
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE * (spriteView != null ? 2 : 1);
+		// Players and NPCs get outlined by their shape, whatever their colors, see PainterlyPass
+		int objectId = renderable instanceof Actor && scene.getWorldViewId() == WorldView.TOPLEVEL ?
+			1 + Math.floorMod(System.identityHashCode(renderable), 255) : 0;
 		int renderMode = renderable.getRenderMode();
 		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0)
 		{
@@ -1353,6 +1377,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			try
 			{
 				uploader.setSprite(spriteView, sprite != null ? sprite.width : 1);
+				uploader.setObjectId(objectId);
 				uploader.uploadSortedModel(rt, worldProjection, m, orient, x, y, z, o.vbo.vb, a.vbo.vb, renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH);
 			}
 			catch (Exception ex)
@@ -1362,6 +1387,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			finally
 			{
 				uploader.setSprite(null, 1);
+				uploader.setObjectId(0);
 			}
 			int end = a.vbo.vb.position();
 
@@ -1383,6 +1409,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			VAO o = rt.vaoO.get(size);
 			ModelUploader uploader = rt.modelUploader;
 			uploader.setSprite(spriteView, sprite != null ? sprite.width : 1);
+				uploader.setObjectId(objectId);
 			try
 			{
 				uploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
@@ -1390,6 +1417,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			finally
 			{
 				uploader.setSprite(null, 1);
+				uploader.setObjectId(0);
 			}
 			o.addRange(ctx.projection, scene, 0);
 		}
