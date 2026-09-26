@@ -465,35 +465,53 @@ vec3 acrylicPainting(vec2 px, vec2 screenPx) {
 }
 
 // Loose watercolor washes over a light pencil sketch on paper.
+//
+// The scene is repainted as a few flat washes rather than tinted, and the pigment's blotches are pinned to the
+// world's surfaces, so they move with the scene like paint on the objects instead of sitting on the screen.
 vec3 watercolor(vec2 px, vec2 screenPx) {
-    // Washes bleed past the lines and fall short of them: sample color from a slowly wandering offset, a few
-    // times wider than the line wobble, so fills and outlines don't line up
-    vec2 bleed = wobbleOffset(px, 1.0 / 70.0) * 2.5 + wobbleOffset(px, 1.0 / 23.0) * 0.8;
+    // Washes bleed past the lines and fall short of them: sample color from a wandering offset, several times
+    // wider than the line wobble, so fills and outlines don't line up
+    vec2 bleed = wobbleOffset(px, 1.0 / 90.0) * 3.5 + wobbleOffset(px, 1.0 / 30.0) * 1.0;
     vec2 washPx = px + bleed;
-    vec3 wash = kuwahara(washPx, max(paintRadius, 2));
-    wash = limitPaints(adjustSaturation(wash, 0.9));
 
-    // Watercolor dries darker at the rim of each wash: darken where the washed color changes nearby
-    vec2 step = vec2(2.5, 0.0);
-    vec3 dx = sampleColor(washPx + step.xy) - sampleColor(washPx - step.xy);
-    vec3 dy = sampleColor(washPx + step.yx) - sampleColor(washPx - step.yx);
-    float rim = smoothstep(0.04, 0.25, length(dx) + length(dy));
-    wash *= 1.0 - 0.22 * rim;
+    // A few flat tones per wash: heavy smoothing, then snap brightness so detail becomes broad areas of color
+    vec3 wash = kuwahara(washPx, max(paintRadius, 3));
+    wash = limitPaints(adjustSaturation(wash, 0.95));
+    wash = flattenShades(wash, 4.0);
 
-    // Uneven pigment: large soft blotches and finer mottling. Thin areas let the paper through.
-    float blotches = valueNoise(px / 48.0 + boilTime * 3.1) * 0.65 + valueNoise(px / 14.0 - boilTime * 1.7) * 0.35;
-    float density = mix(0.62, 1.08, blotches);
-    // Highlights stay mostly paper, like light washes
-    density *= mix(1.0, 0.8, smoothstep(0.55, 0.95, luma(wash)));
-    vec3 color = mix(vec3(1.0), wash, clamp(density, 0.0, 1.0));
+    // Where the pigment sits. Surfaces use their scene position, mixing in height so walls vary too; the sky and
+    // HUD fall back to screen space.
+    vec3 position;
+    vec2 paperPos = scenePosition(px, position) ?
+        vec2(position.x + position.y * 0.7, position.z - position.y * 0.7) / 160.0 :
+        px / 90.0;
+
+    // Each wash is laid down at its own strength, like separate passes of the brush
+    float passStrength = hash12(floor(wash * 7.0).rg * 13.0 + floor(wash.b * 7.0));
+    // Blotches within a wash: broad pooling and finer mottling, fixed to the surface
+    float blotches = valueNoise(paperPos) * 0.6 + valueNoise(paperPos * 3.3 + 17.0) * 0.4;
+    float density = 0.72 + 0.16 * passStrength + 0.24 * (blotches - 0.5);
+
+    // Watercolor dries darker at the rim of each wash: pigment pools where the washed tone changes
+    vec2 step = vec2(3.0, 0.0);
+    vec3 dx = flattenShades(sampleColor(washPx + step.xy), 4.0) - flattenShades(sampleColor(washPx - step.xy), 4.0);
+    vec3 dy = flattenShades(sampleColor(washPx + step.yx), 4.0) - flattenShades(sampleColor(washPx - step.yx), 4.0);
+    float rim = smoothstep(0.05, 0.3, length(dx) + length(dy));
+    density += 0.25 * rim;
+
+    // Light washes stay mostly paper
+    density *= mix(1.0, 0.75, smoothstep(0.6, 0.95, luma(wash)));
+    // Pigment darkens as it thickens, beyond just covering the paper
+    vec3 pigment = wash * mix(1.0, 0.8, clamp(density - 0.8, 0.0, 1.0));
+    vec3 color = mix(vec3(1.0), pigment, clamp(density, 0.0, 1.0));
 
     // A light pencil sketch underneath, following the real edges rather than the washes
     float line = outline(px + wobbleOffset(px, 1.0 / 40.0) * 0.4, lineWidth);
-    color = mix(color, color * vec3(0.32, 0.30, 0.34), line * 0.55);
+    color = mix(color, color * vec3(0.32, 0.30, 0.34), line * 0.5);
 
     // Cold-press paper: granulation where pigment settles into the grain, then the paper texture itself
     float grain = paperGrain(screenPx);
-    color *= 1.0 - (0.5 - grain) * 0.18 * canvasStrength * density;
+    color *= 1.0 - (0.5 - grain) * 0.2 * canvasStrength * density;
     return softLight(clamp(color, 0.0, 1.0), mix(0.5, grain, canvasStrength));
 }
 
