@@ -825,7 +825,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 		// Object id render buffer, written by frag.glsl's second output
 		rboObjectIdBuffer = glGenRenderbuffers();
 		glBindRenderbuffer(GL_RENDERBUFFER, rboObjectIdBuffer);
-		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_R8, width, height);
+		glRenderbufferStorageMultisample(GL_RENDERBUFFER, aaSamples, GL_R16, width, height);
 		glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_RENDERBUFFER, rboObjectIdBuffer);
 		glDrawBuffers(new int[]{GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1});
 		glReadBuffer(GL_COLOR_ATTACHMENT0);
@@ -1281,7 +1281,15 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 				return;
 			}
 
-			rt.modelUploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
+			rt.modelUploader.setObjectId(ObjectIds.scenery(tileObject.getX(), tileObject.getY(), tileObject.getId()));
+			try
+			{
+				rt.modelUploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);
+			}
+			finally
+			{
+				rt.modelUploader.setObjectId(ObjectIds.NONE);
+			}
 			o.addRange(ctx.projection, scene, 0);
 		}
 		else
@@ -1299,6 +1307,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			ModelUploader sorter = rt.modelUploader;
 
 			int start = a.vbo.vb.position();
+			sorter.setObjectId(ObjectIds.scenery(tileObject.getX(), tileObject.getY(), tileObject.getId()));
 			try
 			{
 				sorter.uploadSortedModel(rt, worldProjection, m, orient, x, y, z, o.vbo.vb, a.vbo.vb, false);
@@ -1306,6 +1315,10 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			catch (Exception ex)
 			{
 				log.debug("error drawing entity", ex);
+			}
+			finally
+			{
+				sorter.setObjectId(ObjectIds.NONE);
 			}
 			int end = a.vbo.vb.position();
 
@@ -1362,8 +1375,9 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 
 		int size = m.getFaceCount() * 3 * VAO.VERT_SIZE * (spriteView != null ? 2 : 1);
 		// Players and NPCs get outlined by their shape, whatever their colors, see PainterlyPass
-		int objectId = renderable instanceof Actor && scene.getWorldViewId() == WorldView.TOPLEVEL ?
-			1 + Math.floorMod(System.identityHashCode(renderable), 255) : 0;
+		int objectId = renderable instanceof Actor ?
+			(scene.getWorldViewId() == WorldView.TOPLEVEL ? ObjectIds.character(renderable) : ObjectIds.NONE) :
+			ObjectIds.scenery(gameObject.getX(), gameObject.getY(), gameObject.getId());
 		int renderMode = renderable.getRenderMode();
 		if (renderMode == Renderable.RENDERMODE_SORTED_NO_DEPTH || m.getFaceTransparencies() != null || m.getTransparency() != 0)
 		{
@@ -1409,7 +1423,7 @@ public class LofiPlugin extends Plugin implements DrawCallbacks
 			VAO o = rt.vaoO.get(size);
 			ModelUploader uploader = rt.modelUploader;
 			uploader.setSprite(spriteView, sprite != null ? sprite.width : 1);
-				uploader.setObjectId(objectId);
+			uploader.setObjectId(objectId);
 			try
 			{
 				uploader.uploadTempModel(m, orient, x, y, z, o.vbo.vb);

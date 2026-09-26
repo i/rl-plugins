@@ -38,7 +38,7 @@ vec3 hsvToSrgb(vec3 c) {
 
 uniform sampler2D sceneColor;  // the full frame, UI coverage in alpha
 uniform sampler2D sceneDepth;  // scene depth, covering only sceneViewport
-uniform sampler2D objectIds;   // scene object ids / 255, covering only sceneViewport: players and NPCs 1-255, else 0
+uniform sampler2D objectIds;   // scene object ids / 65535, covering only sceneViewport, see ObjectIds.java
 uniform vec2 resolution;       // frame size in pixels
 uniform vec4 sceneViewport;    // x, y, width, height of the 3D scene within the frame
 uniform bool hasDepth;
@@ -161,14 +161,24 @@ bool scenePosition(vec2 px, out vec3 position) {
     return true;
 }
 
-// The object id under a pixel, 0-255: players and NPCs have their own, everything else is 0.
+#define OBJECT_MAX_CHARACTER 255.0
+#define OBJECT_GROUND 256.0
+
+// The object id under a pixel, see ObjectIds.java: 0 for sky, 1-255 players and NPCs, 256 the ground,
+// and above that one id per scenery object.
 float objectId(vec2 px) {
     if (!hasDepth)
         return 0.0;
     vec2 uv = (px - sceneViewport.xy) / sceneViewport.zw;
     if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))))
         return 0.0;
-    return floor(texture(objectIds, uv).r * 255.0 + 0.5);
+    return floor(texture(objectIds, uv).r * 65535.0 + 0.5);
+}
+
+// The character id under a pixel, 1-255, or 0 for anything that isn't a player or NPC
+float characterId(vec2 px) {
+    float id = objectId(px);
+    return id <= OBJECT_MAX_CHARACTER ? id : 0.0;
 }
 
 // Distance from the camera in game units, where one tile is 128 units.
@@ -217,7 +227,7 @@ float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight
     float centerLuma = luma(centerColor);
     // The HUD has no depth of its own, so it only gets color lines, at full strength regardless of distance
     float centerUi = center.a;
-    float centerId = objectId(px);
+    float centerId = characterId(px);
     float edge = 0.0;
 
     for (int i = 0; i < 8; i++) {
@@ -235,7 +245,7 @@ float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight
 
         // Players and NPCs are outlined by their shape even where their colors and depth match what's behind
         // them. Only the higher id draws, so lines between two characters stay one line thick.
-        float objectEdge = centerId > objectId(neighbor) ? 1.0 - ui : 0.0;
+        float objectEdge = centerId > characterId(neighbor) ? 1.0 - ui : 0.0;
 
         float nearest = min(centerDistance, neighborDistance);
         float fade = mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui);
@@ -572,97 +582,77 @@ vec3 landscapePainting(vec2 px, vec2 screenPx) {
     return softLight(clamp(color, 0.0, 1.0), mix(0.5, paperGrain(screenPx), canvasStrength));
 }
 
-// Paper cutout, like Archer's ransom-note look: the frame is cut into flat pieces of colored paper glued on top
-// of each other. Each piece has its own paper, is nudged slightly out of place, shows a hairline white cut edge,
-// and casts a small shadow onto whatever it sits on.
+// Paper cutout, like Archer's ransom-note look: every object is a piece of colored paper glued on top of what's
+// behind it. Pieces come from the object id buffer, so they follow real shapes: each character, tree or wall is
+// one piece and the ground is one sheet. Each piece has its own paper, is nudged slightly out of place, shows a
+// hairline white cut edge, and casts a small shadow onto the piece below.
 const float CUTOUT_SHADOW_PIXELS = 3.0;
-const float CUTOUT_JITTER_PIXELS = 1.5;
-const float CUTOUT_EDGE_PIXELS = 1.0;
+const float CUTOUT_JITTER_PIXELS = 1.0;
 const vec3 CUTOUT_EDGE_COLOR = vec3(0.97, 0.95, 0.9);
 
-// A piece's flat color: a blur of the frame, wide enough that texture and noise don't become pieces of their
-// own, snapped to a few hues, saturations and shades so each patch of similar color becomes one piece
-vec3 cutoutColor(vec2 px) {
-    float r = 1.5 * float(max(paintRadius, 2));
-    vec3 blurred = (
-        sampleColor(px) * 2.0 +
-        sampleColor(px + vec2(-r, -r)) + sampleColor(px + vec2(r, -r)) +
-        sampleColor(px + vec2(-r, r)) + sampleColor(px + vec2(r, r))
-    ) / 6.0;
-    vec3 hsv = srgbToHsv(clamp(blurred, 0.0, 1.0));
-    float hues = hueSteps > 0 ? float(hueSteps) : 8.0;
-    hsv.x = round(hsv.x * hues) / hues;
-    hsv.y = round(hsv.y * 3.0) / 3.0;
-    hsv.z = (floor(hsv.z * 4.0) + 0.5) / 4.0;
-    return hsvToSrgb(hsv);
+// Stacking layers: sky at the back, then the ground, scenery, and characters on top
+float cutoutLayer(float id) {
+    if (id <= 0.0)
+        return 0.0;
+    if (id == OBJECT_GROUND)
+        return 1.0;
+    return id > OBJECT_GROUND ? 2.0 : 3.0;
 }
 
-// Identifies the piece under a pixel: its color, plus the character it belongs to so characters are cut
-// separately from same-colored ground. w is how far away the piece is, for deciding which piece is on top.
-vec4 cutoutPiece(vec2 px) {
-    vec3 color = cutoutColor(px);
-    float id = objectId(px);
-    // Characters always sit on top
-    float depth = id > 0.0 ? 0.0 : viewDistance(px);
-    return vec4(color + id * 7.0, depth);
+// Whether piece a (id, distance) lies on top of piece b. Within a layer, the nearer piece wins.
+bool onTop(vec2 a, vec2 b) {
+    float la = cutoutLayer(a.x);
+    float lb = cutoutLayer(b.x);
+    if (la != lb)
+        return la > lb;
+    return a.y < b.y;
 }
 
-bool samePiece(vec4 a, vec4 b) {
-    vec3 d = a.rgb - b.rgb;
-    return dot(d, d) < 1e-4;
-}
-
-float pieceSeed(vec4 piece) {
-    return hash12(piece.rg * 61.0 + piece.b * 29.0);
-}
-
-// Whether piece a lies on top of b. Pieces on the same surface are stacked by their seed instead, so exactly one
-// of two touching pieces is on top and each boundary gets one edge, not two.
-bool onTop(vec4 a, vec4 b) {
-    float nearer = min(a.w, b.w);
-    if (abs(a.w - b.w) > max(nearer * 0.03, 8.0))
-        return a.w < b.w;
-    return pieceSeed(a) > pieceSeed(b);
+vec2 cutoutPiece(vec2 px) {
+    return vec2(objectId(px), viewDistance(px));
 }
 
 vec3 paperCutout(vec2 px, vec2 screenPx) {
-    // Nudge each piece a little out of place, seeded by the piece, so edges don't line up like a clean render
-    vec4 guess = cutoutPiece(px);
-    float seed = pieceSeed(guess);
+    // The HUD keeps its shapes, on plain paper
+    if (uiCoverage(px) > 0.5)
+        return softLight(sampleColor(px), mix(0.5, paperGrain(screenPx), canvasStrength));
+
+    // Nudge each piece a little out of place, so cuts don't line up like a clean render
+    float firstId = objectId(px);
+    float seed = hash12(vec2(firstId * 0.37, 11.0));
     vec2 jitter = (vec2(seed, hash12(vec2(seed, 3.7))) - 0.5) * 2.0 * CUTOUT_JITTER_PIXELS;
     vec2 at = px + jitter;
-    vec4 piece = cutoutPiece(at);
-    vec3 color = cutoutColor(at);
+    vec2 piece = cutoutPiece(at);
+    float ownSeed = hash12(vec2(piece.x * 0.37, 11.0));
+
+    // Flat paper color with a few shading bands, so faces and clothes stay readable inside a piece
+    vec3 color = kuwahara(at, max(paintRadius, 2));
+    color = flattenShades(adjustSaturation(color, 1.15), 4.0);
 
     // Each piece is cut from its own sheet: a slight tint, and fibers running at the piece's own angle
-    float ownSeed = pieceSeed(piece);
     float angle = ownSeed * 6.2831853;
     vec2 along = vec2(cos(angle), sin(angle));
     float fibers = valueNoise(vec2(dot(screenPx, along) * 0.06, dot(screenPx, vec2(-along.y, along.x)) * 0.6));
     float flecks = hash12(floor(screenPx / 2.0) + ownSeed * 71.0);
-    color *= 1.0 + (ownSeed - 0.5) * 0.08;
+    color *= 1.0 + (ownSeed - 0.5) * 0.1;
     color *= 1.0 + ((fibers - 0.5) * 0.12 + (flecks - 0.5) * 0.06) * mix(0.4, 1.0, canvasStrength);
-
-    // The HUD keeps its shapes: no cut edges or shadows
-    if (uiCoverage(px) > 0.5)
-        return clamp(color, 0.0, 1.0);
 
     // A hairline white cut edge where this piece lies on top of a different one
     float edge = 0.0;
     for (int i = 0; i < 4; i++) {
-        vec2 offset = vec2(i == 0 ? 1.0 : i == 1 ? -1.0 : 0.0, i == 2 ? 1.0 : i == 3 ? -1.0 : 0.0) * CUTOUT_EDGE_PIXELS;
-        vec4 neighbor = cutoutPiece(at + offset);
-        if (!samePiece(piece, neighbor) && onTop(piece, neighbor))
+        vec2 offset = vec2(i == 0 ? 1.0 : i == 1 ? -1.0 : 0.0, i == 2 ? 1.0 : i == 3 ? -1.0 : 0.0);
+        vec2 neighbor = cutoutPiece(at + offset);
+        if (neighbor.x != piece.x && onTop(piece, neighbor))
             edge = 1.0;
     }
     color = mix(color, CUTOUT_EDGE_COLOR, edge * 0.85);
 
-    // A small soft shadow cast down and to the right by any piece on top of this one
+    // A small soft shadow cast down and to the right by any piece lying on this one
     float shadow = 0.0;
     for (int i = 1; i <= 2; i++) {
         float reach = CUTOUT_SHADOW_PIXELS * float(i) / 2.0;
-        vec4 caster = cutoutPiece(at + vec2(-reach, reach));
-        if (!samePiece(piece, caster) && onTop(caster, piece))
+        vec2 caster = cutoutPiece(at + vec2(-reach, reach));
+        if (caster.x != piece.x && onTop(caster, piece))
             shadow = max(shadow, 1.0 - float(i - 1) * 0.45);
     }
     color *= 1.0 - 0.28 * shadow * (1.0 - edge);
