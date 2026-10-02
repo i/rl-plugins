@@ -69,6 +69,7 @@ class PainterlyPass
 	private int uniCameraPos;
 	private int uniObjectIds;
 	private int uniHighlightCount;
+	private int uniOutlines;
 	private int uniHighlightIds;
 	private int uniHighlightColors;
 	private int uniAdaptivePalette;
@@ -101,6 +102,8 @@ class PainterlyPass
 	private PainterlyStyle failedStyle;
 	private boolean capturingFrame;
 	private boolean frameHasDepth;
+	// Whether a failed depth copy has been logged, so it's reported once rather than every frame
+	private boolean depthErrorLogged;
 
 	// The scene camera of the frame being drawn, set by LofiPlugin before the scene draws
 	private final int[] sceneViewport = new int[4];
@@ -132,6 +135,7 @@ class PainterlyPass
 		uniResolution = glGetUniformLocation(program, "resolution");
 		uniSceneViewport = glGetUniformLocation(program, "sceneViewport");
 		uniHasDepth = glGetUniformLocation(program, "hasDepth");
+		uniOutlines = glGetUniformLocation(program, "outlines");
 		uniHudStrength = glGetUniformLocation(program, "hudStrength");
 		uniStyle = glGetUniformLocation(program, "style");
 		uniDebugView = glGetUniformLocation(program, "debugView");
@@ -327,6 +331,7 @@ class PainterlyPass
 		glUniform2f(uniResolution, frameWidth, frameHeight);
 		glUniform4f(uniSceneViewport, sceneViewport[0], sceneViewport[1], sceneViewport[2], sceneViewport[3]);
 		glUniform1i(uniHasDepth, frameHasDepth ? 1 : 0);
+		glUniform1i(uniOutlines, config.painterlyOutlines() ? 1 : 0);
 		glUniform1i(uniStyle, config.painterlyStyle().shaderId);
 		glUniform1i(uniDebugView, config.painterlyDebugView().shaderId);
 		glUniform1f(uniHudStrength, config.painterlyHudStrength() / 100f);
@@ -451,9 +456,25 @@ class PainterlyPass
 			return false;
 		}
 
+		// Clear stale errors, so a failed copy below is noticed rather than read as missing depth everywhere
+		while (glGetError() != GL_NO_ERROR)
+		{
+			// drain
+		}
 		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboScene);
 		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboDepth);
 		glBlitFramebuffer(0, 0, width, height, 0, 0, width, height, GL_DEPTH_BUFFER_BIT, GL_NEAREST);
+		int depthError = glGetError();
+		if (depthError != GL_NO_ERROR)
+		{
+			if (!depthErrorLogged)
+			{
+				log.warn("Copying the scene depth failed (GL error {}), art styles run without depth", depthError);
+				depthErrorLogged = true;
+			}
+			glBindFramebuffer(GL_READ_FRAMEBUFFER, defaultFramebuffer);
+			return false;
+		}
 
 		// Object ids, from the scene's second color buffer
 		glReadBuffer(GL_COLOR_ATTACHMENT1);

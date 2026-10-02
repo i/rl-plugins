@@ -47,6 +47,7 @@ uniform int debugView;
 uniform float boilTime;        // changes a few times per second, seeds the wobble
 uniform float wobble;          // maximum wobble offset in pixels
 uniform float lineWidth;       // outline thickness in pixels
+uniform bool outlines;         // whether styles draw outlines at all
 uniform int paintRadius;       // brush radius, or pixel size for MS Paint
 uniform float canvasStrength;  // 0..1 paper/canvas grain strength
 uniform int hueSteps;          // number of hues the acrylic style paints with, 0 = unlimited
@@ -213,6 +214,8 @@ float luma(vec3 color) {
 // Each test is one-sided (only the nearer or darker pixel draws), so lines are lineWidth thick, not double.
 // colorWeight and depthWeight scale color and depth lines; character shapes are always outlined in full.
 float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight) {
+    if (!outlines)
+        return 0.0;
     float centerDistance = viewDistance(px);
     // Color and UI coverage come from one read: rgb is the frame, alpha the HUD coverage
     vec4 center = texture(sceneColor, px / resolution);
@@ -241,7 +244,8 @@ float outlineWeighted(vec2 px, float width, float colorWeight, float depthWeight
         float objectEdge = centerId > objectId(neighbor) ? 1.0 - ui : 0.0;
 
         float nearest = min(centerDistance, neighborDistance);
-        float fade = mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui);
+        // Without depth every pixel reads as sky distance, so lines aren't faded by distance at all
+        float fade = hasDepth ? mix(1.0 - smoothstep(LINE_FADE_START, LINE_FADE_END, nearest), 1.0, ui) : 1.0;
         edge = max(edge, max(max(depthEdge * depthWeight, colorEdge * colorWeight), objectEdge) * fade);
     }
     return edge;

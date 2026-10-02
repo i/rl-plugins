@@ -66,6 +66,18 @@ public interface LofiConfig extends Config
 		return PainterlyStyle.SQUIGGLE;
 	}
 
+	@ConfigItem(
+		keyName = "painterlyOutlines",
+		name = "Model outlines",
+		description = "Draw the art style's outlines around models and shapes. Highlight outlines for sprites are a separate setting.",
+		position = 1,
+		section = painterlySettings
+	)
+	default boolean painterlyOutlines()
+	{
+		return true;
+	}
+
 	@Range(min = 1, max = 6)
 	@ConfigItem(
 		keyName = "painterlyLineWidth",

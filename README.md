@@ -21,7 +21,8 @@ The scene and UI are drawn into an offscreen frame whose alpha records UI covera
 to the screen in one full-screen pass that also reads the scene's depth for outlines. Players and
 NPCs are also outlined by their shape: each gets an id from 1 to 32767 in its vertices' spare short,
 the scene shader writes it to a second, 16-bit colour buffer, and the pass draws a line wherever it changes,
-so characters stay separate from ground of the same colour.
+so characters stay separate from ground of the same colour. **Model outlines** turns all of these
+lines off. If the depth copy fails, which is logged once, lines are drawn without distance fading.
 
 MS Paint's adaptive palette is picked on the GPU with k-means clustering in OKLab: each frame is
 shrunk to 64x36 samples, and last frame's palette takes one clustering step towards them, so colours
