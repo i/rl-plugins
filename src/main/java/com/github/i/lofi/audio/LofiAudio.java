@@ -96,6 +96,7 @@ public class LofiAudio {
 			float lowCut = config.lofiLowCut();
 			float highCut = config.lofiHighCut();
 			float saturation = config.lofiSaturation() / 100f;
+			float grit = config.lofiGrit() / 100f;
 			Set<Object> players = Collections.newSetFromMap(new IdentityHashMap<>());
 			for (PlayerSource source : playerSources)
 				source.collect(players);
@@ -104,7 +105,7 @@ public class LofiAudio {
 				Object line = lineField.get(player);
 				if (line instanceof LofiLine) {
 					((LofiLine) line).setSpeed(speed, depth);
-					((LofiLine) line).setTone(lowCut, highCut, saturation);
+					((LofiLine) line).setTone(lowCut, highCut, saturation, grit);
 					continue;
 				}
 				if (!(line instanceof SourceDataLine) || !((SourceDataLine) line).isOpen())
@@ -117,7 +118,7 @@ public class LofiAudio {
 
 				LofiLine lofi = new LofiLine((SourceDataLine) line);
 				lofi.setSpeed(speed, depth);
-				lofi.setTone(lowCut, highCut, saturation);
+				lofi.setTone(lowCut, highCut, saturation, grit);
 				lineField.set(player, lofi);
 				wrapped.put(player, lofi);
 				log.debug("Lo-fi audio attached to {} ({})", player.getClass().getName(), lofi.getFormat());
