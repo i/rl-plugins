@@ -95,9 +95,7 @@ during upload).
 
 Plays the game's audio slower (**Playback speed**, 92% by default) while the speed drifts a
 little slower and faster around that (**Wobble**), bending pitch and tempo together like a worn
-tape. **Tape saturation**, **Low cut** and **High cut** give it a warm, muffled tone, and **Grit**
-(40% by default) makes it sound like cheap gear: tape hiss and the odd crackle, harder drive, and a
-sample-and-hold and bit crusher like an old sampler (down to about 9 kHz and 6 bits at 100%).
+tape. **Tape saturation**, **Low cut** and **High cut** give it a warm, muffled tone.
 
 The game renders audio only when its output line has free space. The plugin swaps that line for
 one that buffers what the game writes and drains it at the wobbling speed through a resampler, so

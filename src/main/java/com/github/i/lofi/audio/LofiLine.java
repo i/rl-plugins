@@ -80,13 +80,8 @@ public final class LofiLine implements SourceDataLine {
 	 * @param highCutHz  frequencies above this are rolled off, 0 for off
 	 * @param saturation tape drive from 0 to 1
 	 */
-	public void setTone(
-		float lowCutHz,
-		float highCutHz,
-		float saturation,
-		float grit
-	) {
-		tone.set(lowCutHz, highCutHz, saturation, grit);
+	public void setTone(float lowCutHz, float highCutHz, float saturation) {
+		tone.set(lowCutHz, highCutHz, saturation);
 	}
 
 	/**

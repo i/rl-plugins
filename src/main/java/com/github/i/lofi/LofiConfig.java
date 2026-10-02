@@ -412,20 +412,6 @@ public interface LofiConfig extends Config
 		return 6000;
 	}
 
-	@Units(Units.PERCENT)
-	@Range(min = 0, max = 100)
-	@ConfigItem(
-		keyName = "lofiGrit",
-		name = "Grit",
-		description = "Cheap-gear grit: tape hiss and crackle, harder drive, and a lower sample rate and bit depth like an old sampler. 0 is off.",
-		position = 6,
-		section = lofiAudioSettings
-	)
-	default int lofiGrit()
-	{
-		return 40;
-	}
-
 	@Range(
 		max = MAX_DISTANCE
 	)
