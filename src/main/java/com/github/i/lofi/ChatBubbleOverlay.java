@@ -121,7 +121,17 @@ class ChatBubbleOverlay extends Overlay
 
 			// Above the health bar while one is showing, so the tail doesn't cover it
 			int clearance = actor.getHealthRatio() >= 0 ? HealthBarOverlay.HEAD_CLEARANCE : 0;
-			Point anchor = actor.getCanvasTextLocation(g, "", actor.getLogicalHeight() + HEAD_CLEARANCE + clearance);
+			Point anchor;
+			try
+			{
+				anchor = actor.getCanvasTextLocation(g, "", actor.getLogicalHeight() + HEAD_CLEARANCE + clearance);
+			}
+			catch (RuntimeException ex)
+			{
+				// Actors that just despawned can throw while their position is looked up
+				it.remove();
+				continue;
+			}
 			if (anchor == null)
 			{
 				continue;
