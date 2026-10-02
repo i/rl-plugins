@@ -4,13 +4,18 @@ package com.github.i.lofi.audio;
  * The tone of a worn tape: a gentle low cut, a soft high roll-off and mild saturation.
  * <p>
  * Each band edge is two one-pole filters in a row, a gentle 12 dB per octave slope that sounds like old gear rather
- * than a hard EQ. Saturation is a tanh curve scaled so quiet audio passes at the same level and only loud peaks
- * get rounded off, which is what tape does when it's driven. Settings may change from any thread and apply on the
+ * than a hard EQ. Saturation is a slightly lopsided tanh curve, which adds the even harmonics of driven tape. Its
+ * level is matched at a typical game audio level rather than at silence, so heavier drive sounds denser and more
+ * driven instead of just quieter. Settings may change from any thread and apply on the
  * next frame; processing happens on one thread only.
  */
 public final class TapeTone {
-	/** Drive at 100% saturation. Kept low so it warms the sound instead of audibly distorting it. */
-	private static final float MAX_DRIVE = 3f;
+	/** Drive at 100% saturation, enough to clearly break up and compress */
+	private static final float MAX_DRIVE = 10f;
+	/** The input level that comes out unchanged at any drive. Quieter audio gets louder, peaks get squashed. */
+	private static final float REFERENCE_LEVEL = 0.3f;
+	/** How lopsided the curve is at 100% saturation, for even harmonics */
+	private static final float MAX_ASYMMETRY = 0.15f;
 
 	private final int channels;
 	private final float sampleRate;
@@ -60,6 +65,8 @@ public final class TapeTone {
 		boolean lowCut = lowCutHz > 0;
 		boolean highCut = isHighCutActive();
 		float drive = 1 + saturation * (MAX_DRIVE - 1);
+		float asymmetry = saturation * MAX_ASYMMETRY;
+		float makeup = drive > 1 ? makeup(drive) : 1;
 
 		for (int c = 0; c < channels; c++) {
 			float x = frame[c];
@@ -83,10 +90,24 @@ public final class TapeTone {
 			}
 
 			if (drive > 1)
-				x = (float) Math.tanh(drive * x) / drive;
+				x = saturate(x, drive, asymmetry, makeup);
 
 			frame[c] = x;
 		}
+	}
+
+	/**
+	 * A tanh curve shifted by the asymmetry and moved back through zero, so silence stays silent but positive
+	 * and negative swings clip differently.
+	 */
+	static float saturate(float x, float drive, float asymmetry, float makeup) {
+		double shaped = Math.tanh(drive * x + asymmetry) - Math.tanh(asymmetry);
+		return (float) (shaped * makeup);
+	}
+
+	/** Output gain that keeps REFERENCE_LEVEL at the same level after the curve */
+	static float makeup(float drive) {
+		return REFERENCE_LEVEL / (float) Math.tanh(drive * REFERENCE_LEVEL);
 	}
 
 	private boolean isHighCutActive() {

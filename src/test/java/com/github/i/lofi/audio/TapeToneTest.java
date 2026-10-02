@@ -54,11 +54,28 @@ public class TapeToneTest {
 	}
 
 	@Test
-	public void saturationKeepsQuietLevelsAndRoundsOffPeaks() {
-		double quiet = gainAt(tone(0, 0, 1), 1000, 0.02);
-		assertEquals(1, quiet, 0.01);
+	public void saturationKeepsTypicalLevelsAndSquashesPeaks() {
+		// A typical level comes out about as loud as it went in, within 3 dB, at any drive
+		double typical = gainAt(tone(0, 0, 1), 1000, 0.3);
+		assertTrue("typical gain " + typical, typical > 0.7 && typical < 1.41);
 
+		// Quiet parts come up and peaks go down: the dynamics get squashed
+		double quiet = gainAt(tone(0, 0, 1), 1000, 0.02);
 		double loud = gainAt(tone(0, 0, 1), 1000, 0.9);
+		assertTrue("quiet gain " + quiet, quiet > 2);
 		assertTrue("loud gain " + loud, loud < 0.5);
+	}
+
+	@Test
+	public void saturationKeepsSilenceSilent() {
+		assertEquals(0, TapeTone.saturate(0, 10, 0.15f, TapeTone.makeup(10)), 0f);
+	}
+
+	@Test
+	public void asymmetryClipsSwingsDifferently() {
+		float makeup = TapeTone.makeup(10);
+		float up = TapeTone.saturate(0.8f, 10, 0.15f, makeup);
+		float down = TapeTone.saturate(-0.8f, 10, 0.15f, makeup);
+		assertNotEquals(up, -down, 1e-3f);
 	}
 }

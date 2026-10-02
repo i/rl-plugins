@@ -375,7 +375,7 @@ public interface LofiConfig extends Config
 	@ConfigItem(
 		keyName = "lofiSaturation",
 		name = "Tape saturation",
-		description = "Warms the sound by gently rounding off loud peaks, like overdriven tape. 0% is clean.",
+		description = "Drives the sound like overdriven tape: warm at low settings, dense and broken up at high ones. 0% is clean.",
 		position = 3,
 		section = lofiAudioSettings
 	)
